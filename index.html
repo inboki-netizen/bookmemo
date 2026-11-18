@@ -97,6 +97,14 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 #cvOv.off{pointer-events:none}
 .ocrbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .ocrbtns button{padding:12px 8px}
+.lens{width:100%;margin-top:8px;padding:14px;font-size:16px;font-weight:700;background:#1a73e8;border-color:#1a73e8;color:#fff}
+.lens small{font-weight:400;opacity:.85}
+.lenshelp{font-size:12.5px;color:var(--sub);margin:6px 2px 4px;line-height:1.5}
+.txthead{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.txthead label{flex:1}
+#pasteBtn{flex:none;margin-bottom:4px}
+#pasteBtn.blink{background:#fff3b0;border-color:#e6c200;font-weight:700;animation:bl 1s ease-in-out 3}
+@keyframes bl{50%{transform:scale(1.08)}}
 .engopt{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin:8px 0 0}
 .engopt input{width:auto;margin:0}
 .ocrmsg{font-size:13px;color:var(--g);min-height:18px;margin-top:6px}
@@ -161,8 +169,10 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
             <button id="tChange">📷 사진 바꾸기</button>
           </div>
           <div class="cwrap" id="cwrap"><div class="cinner" id="cinner"><canvas id="cvBase"></canvas><canvas id="cvOv"></canvas></div></div>
+          <button id="lensBtn" class="lens">🔍 구글 렌즈로 보내기 <small>(가장 정확)</small></button>
+          <div class="lenshelp">렌즈에서 글자 선택 → <b>복사</b> → 이 앱으로 돌아와 <b>📋 붙여넣기</b>. 사각형으로 고른 부분이 있으면 그 부분만 보냅니다.</div>
           <div class="ocrbtns">
-            <button id="ocrHl" class="primary">선택 부분만 글자로</button>
+            <button id="ocrHl">선택 부분만 글자로</button>
             <button id="ocrAll">사진 전체 글자로</button>
           </div>
           <label class="engopt"><input type="checkbox" id="optEng"> 영어 문장이 많은 책 (영어도 함께 인식)</label>
@@ -174,7 +184,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
           <div><label>찍은 날짜</label><input id="fDate" type="date"></div>
           <div><label>페이지</label><input id="fPage" inputmode="numeric" placeholder="예: 125"></div>
         </div>
-        <label>구절 (사진에서 변환된 텍스트 · 직접 수정 가능)</label>
+        <div class="txthead"><label>구절 (변환·붙여넣기한 텍스트 · 직접 수정 가능)</label><button id="pasteBtn" class="sm">📋 붙여넣기</button></div>
         <textarea id="fText" rows="8" placeholder="OCR 결과가 여기에 들어옵니다. 직접 입력해도 됩니다."></textarea>
         <label>내 생각 (선택)</label>
         <textarea id="fNote" rows="3" placeholder="이 구절에 대한 생각"></textarea>
@@ -738,6 +748,55 @@ async function runOcr(mode) {
     else ocrMsg('⚠️ 변환 실패: ' + m + ' — 인터넷 연결을 확인하세요(첫 사용 시 필요).');
   } finally { ocrBusy = false; ocrPrefix = ''; $('#ocrHl').disabled = $('#ocrAll').disabled = false; }
 }
+/* ---------- 구글 렌즈 연동: 사진(또는 선택 부분)을 공유 → 렌즈에서 복사 → 붙여넣기 ---------- */
+let lensPending = false;
+function lensCanvas() {
+  const rs = selRegions();
+  if (!rs.length) return cvBase;
+  const x0 = Math.min(...rs.map(r => r[0])), y0 = Math.min(...rs.map(r => r[1]));
+  const x1 = Math.max(...rs.map(r => r[0] + r[2])), y1 = Math.max(...rs.map(r => r[1] + r[3]));
+  const c = mk(x1 - x0, y1 - y0), cx = c.getContext('2d');
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+  rs.forEach(r => cx.drawImage(cvBase, r[0], r[1], r[2], r[3], r[0] - x0, r[1] - y0, r[2], r[3]));
+  return c;
+}
+$('#lensBtn').onclick = async () => {
+  if (!ed.image) { toast('먼저 사진을 넣어 주세요'); return; }
+  const blob = await new Promise(r => lensCanvas().toBlob(r, 'image/jpeg', 0.92));
+  const file = new File([blob], '독서메모_구절.jpg', { type: 'image/jpeg' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      lensPending = true;
+      await navigator.share({ files: [file] });
+      toast('공유 목록에서 "Google 렌즈"(또는 "렌즈로 검색")를 고르세요', 4000);
+    } catch (e) { if (e.name !== 'AbortError') toast('공유 실패: ' + (e.message || e)); lensPending = false; }
+  } else {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('PC: 받은 사진을 크롬에서 열고 마우스 오른쪽 → "Google 렌즈로 검색" → 텍스트 복사 후 [📋 붙여넣기]', 7000);
+    lensPending = true;
+  }
+};
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && lensPending && !$('#vEdit').hidden) {
+    lensPending = false;
+    const b = $('#pasteBtn'); b.classList.remove('blink'); void b.offsetWidth; b.classList.add('blink');
+    toast('렌즈에서 복사했으면 [📋 붙여넣기]를 누르세요', 3500);
+  }
+});
+$('#pasteBtn').onclick = async () => {
+  const ta = $('#fText');
+  try {
+    const t = cleanText(await navigator.clipboard.readText());
+    if (!t) { toast('복사된 글자가 없습니다. 렌즈에서 [복사]를 먼저 눌러 주세요'); return; }
+    ta.value = (ta.value.trim() ? ta.value.trim() + '\n\n' : '') + t;
+    $('#pasteBtn').classList.remove('blink');
+    toast('붙여넣었습니다 — 필요하면 고친 뒤 저장하세요');
+  } catch (e) {
+    ta.focus();
+    toast('글자 칸을 길게 눌러 [붙여넣기]를 선택해 주세요', 4000);
+  }
+};
 try { $('#optEng').checked = localStorage.getItem('ocrEng') === '1'; } catch (_) {}
 $('#optEng').onchange = e => { try { localStorage.setItem('ocrEng', e.target.checked ? '1' : '0'); } catch (_) {} };
 $('#ocrHl').onclick = () => runOcr('hl');
