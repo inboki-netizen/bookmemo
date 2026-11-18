@@ -102,6 +102,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 .ocrbtns button{padding:12px 8px}
 .lens{width:100%;margin-top:8px;padding:14px;font-size:16px;font-weight:700;background:#1a73e8;border-color:#1a73e8;color:#fff}
 .lens small{font-weight:400;opacity:.85}
+.lensimg{display:block;width:100%;max-height:50vh;object-fit:contain;background:#eee;border-radius:8px;margin-top:10px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
 .lenshelp{font-size:12.5px;color:var(--sub);margin:6px 2px 4px;line-height:1.5}
 .txthead{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
 .txthead label{flex:1}
@@ -129,7 +130,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 </head>
 <body>
 <header class="top">
-  <a href="#" class="logo">📚 독서메모 <small class="ver">v7 · 11/18</small></a>
+  <a href="#" class="logo">📚 독서메모 <small class="ver">v8 · 11/18</small></a>
   <button id="btnBackup" class="ghost">☁️ 백업</button>
 </header>
 
@@ -175,7 +176,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
           </div>
           <div class="cwrap" id="cwrap"><div class="cinner" id="cinner"><canvas id="cvBase"></canvas><canvas id="cvOv"></canvas></div></div>
           <button id="lensBtn" class="lens">🔍 구글 렌즈로 보내기 <small>(가장 정확)</small></button>
-          <div class="lenshelp">렌즈에서 글자 선택 → <b>복사</b> → 이 앱으로 돌아와 <b>📋 붙여넣기</b>. 사각형으로 고른 부분이 있으면 그 부분만 보냅니다.</div>
+          <div class="lenshelp">사각형으로 고른 부분이 있으면 그 부분만 렌즈로 보냅니다.</div>
           <div class="ocrbtns">
             <button id="ocrHl">선택 부분만 글자로</button>
             <button id="ocrAll">사진 전체 글자로</button>
@@ -223,6 +224,26 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
       <button id="bCancel">취소</button>
       <button id="bSave" class="primary">저장</button>
     </div>
+  </div>
+</div>
+
+<!-- 구글 렌즈 -->
+<div id="mLens" class="modal" hidden>
+  <div class="sheet">
+    <h3>🔍 구글 렌즈로 글자 가져오기</h3>
+    <div class="help" style="margin-top:4px">
+      <b>① 아래 사진을 손가락으로 길게 누르세요</b><br>
+      ② 메뉴에서 <b>"Google 렌즈로 이미지 검색"</b> 선택<br>
+      ③ 렌즈 화면 아래 <b>[텍스트]</b> → <b>[모두 선택]</b> 또는 원하는 부분 선택 → <b>[복사]</b><br>
+      ④ 뒤로 가기로 이 앱에 돌아와 <b>[📋 붙여넣기]</b>
+    </div>
+    <img id="lensImg" class="lensimg" alt="렌즈로 보낼 사진">
+    <div class="row" style="margin-top:10px">
+      <button id="lensShare" class="sm">↗ 다른 앱으로 공유</button>
+      <button id="lensSave" class="sm">⬇ 사진 저장 (갤러리 텍스트 추출용)</button>
+    </div>
+    <div class="help">메뉴에 렌즈가 안 나오면: 갤럭시는 화면 아래 <b>홈 버튼(막대)을 길게 눌러 "서클 투 서치"</b>로 이 사진의 글자에 동그라미를 그려 복사할 수도 있습니다(지원 기종만). 또는 [사진 저장] 후 <b>갤러리에서 사진 열기 → 오른쪽 아래 'T' 텍스트 추출</b> → 복사.</div>
+    <button id="lensClose" class="bigbtn">닫기</button>
   </div>
 </div>
 
@@ -787,26 +808,32 @@ function lensCanvas() {
   rs.forEach(r => cx.drawImage(cvBase, r[0], r[1], r[2], r[3], r[0] - x0, r[1] - y0, r[2], r[3]));
   return c;
 }
+let lensFile = null, lensUrl = null;
 $('#lensBtn').onclick = async () => {
   if (!ed.image) { toast('먼저 사진을 넣어 주세요'); return; }
   const blob = await new Promise(r => lensCanvas().toBlob(r, 'image/jpeg', 0.92));
-  const file = new File([blob], '독서메모_구절.jpg', { type: 'image/jpeg' });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      lensPending = true;
-      await navigator.share({ files: [file] });
-      toast('공유 목록에서 "Google 렌즈"(또는 "렌즈로 검색")를 고르세요', 4000);
-    } catch (e) { if (e.name !== 'AbortError') toast('공유 실패: ' + (e.message || e)); lensPending = false; }
-  } else {
-    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    toast('PC: 받은 사진을 크롬에서 열고 마우스 오른쪽 → "Google 렌즈로 검색" → 텍스트 복사 후 [📋 붙여넣기]', 7000);
-    lensPending = true;
-  }
+  lensFile = new File([blob], '독서메모_구절_' + Date.now() + '.jpg', { type: 'image/jpeg' });
+  if (lensUrl) URL.revokeObjectURL(lensUrl);
+  lensUrl = URL.createObjectURL(blob);
+  $('#lensImg').src = await readAsDataURL(blob);
+  $('#mLens').hidden = false;
+  lensPending = true;
+};
+$('#lensClose').onclick = () => { $('#mLens').hidden = true; };
+$('#lensShare').onclick = async () => {
+  if (navigator.canShare && navigator.canShare({ files: [lensFile] })) {
+    try { await navigator.share({ files: [lensFile] }); } catch (e) { if (e.name !== 'AbortError') toast('공유 실패: ' + (e.message || e)); }
+  } else toast('이 기기에서는 공유를 지원하지 않습니다. [사진 저장]을 이용하세요', 4000);
+};
+$('#lensSave').onclick = () => {
+  const a = document.createElement('a'); a.href = lensUrl; a.download = lensFile.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('저장했습니다 → 갤러리(또는 내 파일 > 다운로드)에서 열어 텍스트 추출', 5000);
 };
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && lensPending && !$('#vEdit').hidden) {
     lensPending = false;
+    $('#mLens').hidden = true;
     const b = $('#pasteBtn'); b.classList.remove('blink'); void b.offsetWidth; b.classList.add('blink');
     toast('렌즈에서 복사했으면 [📋 붙여넣기]를 누르세요', 3500);
   }
