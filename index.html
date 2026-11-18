@@ -102,6 +102,11 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 .ocrbtns button{padding:12px 8px}
 .lens{width:100%;margin-top:8px;padding:14px;font-size:16px;font-weight:700;background:#1a73e8;border-color:#1a73e8;color:#fff}
 .lens small{font-weight:400;opacity:.85}
+.pagestrip{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.pagestrip .pg{padding:8px 12px;font-weight:700}
+.pagestrip .pg.on{background:var(--g);border-color:var(--g);color:#fff}
+.pagestrip .add{padding:8px 10px;font-size:14px;background:#eef6f2;border-color:#bcd9cb;color:var(--g);font-weight:700}
+.pagestrip .lbl{font-size:13px;color:var(--sub);margin-right:2px}
 .lensimg{display:block;width:100%;max-height:50vh;object-fit:contain;background:#eee;border-radius:8px;margin-top:10px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
 .lenshelp{font-size:12.5px;color:var(--sub);margin:6px 2px 4px;line-height:1.5}
 .txthead{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
@@ -130,7 +135,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 </head>
 <body>
 <header class="top">
-  <a href="#" class="logo">📚 독서메모 <small class="ver">v8 · 11/18</small></a>
+  <a href="#" class="logo">📚 독서메모 <small class="ver">v9 · 11/18</small></a>
   <button id="btnBackup" class="ghost">☁️ 백업</button>
 </header>
 
@@ -163,6 +168,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
             <button data-pick="album" data-target="memo">🖼 앨범</button>
           </div>
         </div>
+        <div id="pageStrip" class="pagestrip" hidden></div>
         <div id="imgBox" hidden>
           <div class="tools">
             <span class="seg"><button id="mRect">▭ 사각형</button><button id="mPen">✏️ 형광펜</button><button id="mMove">✋ 이동</button></span>
@@ -172,7 +178,8 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
             <button id="tZoom">🔍 확대</button>
             <button id="tRotL">⟲ 왼쪽</button>
             <button id="tRotR">⟳ 오른쪽</button>
-            <button id="tChange">📷 사진 바꾸기</button>
+            <button id="tChange">📷 이 쪽 사진 바꾸기</button>
+            <button id="tDelPage" class="danger">🗑 이 쪽 빼기</button>
           </div>
           <div class="cwrap" id="cwrap"><div class="cinner" id="cinner"><canvas id="cvBase"></canvas><canvas id="cvOv"></canvas></div></div>
           <button id="lensBtn" class="lens">🔍 구글 렌즈로 보내기 <small>(가장 정확)</small></button>
@@ -385,7 +392,7 @@ function memoRow(m, b, q) {
     ${m.thumb ? `<img class="mthumb" src="${m.thumb}" alt="">` : '<div class="mthumb nothumb">📝</div>'}
     <div class="mi">${b ? `<div class="mbook">📖 ${esc(b.title)}</div>` : ''}
     <div class="mtext">${hl(snip(m.text || m.note || '(텍스트 없음)', q), q)}</div>
-    <div class="mdate">${esc(m.date || '')}${m.page ? ' · p.' + esc(m.page) : ''}${m.note && m.text ? ' · 💭' : ''}</div></div></a>`;
+    <div class="mdate">${esc(m.date || '')}${m.page ? ' · p.' + esc(m.page) : ''}${pagesOf(m).length > 1 ? ' · 📄 사진 ' + pagesOf(m).length + '장' : ''}${m.note && m.text ? ' · 💭' : ''}</div></div></a>`;
 }
 async function renderHome() {
   show('vHome');
@@ -516,6 +523,14 @@ async function onPicked(e) {
       const target = '#memo/new/' + pickBook;
       if (location.hash === target) route(); else location.hash = target;
     }
+    else if (pickFor === 'memoadd') {
+      toast('사진 불러오는 중…');
+      const d = await fileToDataURL(f, MEMO_MAX, MEMO_Q);
+      syncCur();
+      ed.pages.push({ image: d, strokes: [] }); ed.cur = ed.pages.length - 1;
+      await setImage(d, false);
+      ocrMsg(`${ed.cur + 1}쪽을 추가했습니다. 이 쪽에서도 구절을 골라 글자로 바꾸면 위 내용 뒤에 이어 붙습니다.`);
+    }
     else { toast('사진 불러오는 중…'); await setImage(await fileToDataURL(f, MEMO_MAX, MEMO_Q), false); }
   } catch (err) { console.warn(err); toast('사진을 읽지 못했습니다: ' + (err.message || err), 6000); }
 }
@@ -524,7 +539,38 @@ $('#fAlbum').addEventListener('change', onPicked);
 
 /* ---------- 메모 편집 + 형광펜 ---------- */
 const cvBase = $('#cvBase'), cvOv = $('#cvOv');
-const ed = { memo: null, bookId: null, strokes: [], image: null, mode: 'rect' };
+const ed = { memo: null, bookId: null, strokes: [], image: null, mode: 'rect', pages: [], cur: 0 };
+/* 메모 한 개 = 여러 쪽 사진 (예전 메모는 사진 1장짜리로 읽음) */
+function pagesOf(m) {
+  if (!m) return [];
+  if (Array.isArray(m.pages) && m.pages.length) return m.pages;
+  return m.image ? [{ image: m.image, strokes: m.strokes || [], thumb: m.thumb || null }] : [];
+}
+function syncCur() {   // 지금 보고 있는 쪽의 선택 표시·미리보기를 저장
+  if (!ed.image || !ed.pages[ed.cur]) return;
+  ed.pages[ed.cur] = { image: ed.image, strokes: ed.strokes, thumb: composite(800) };
+}
+async function showPage(i) {
+  syncCur();
+  ed.cur = i;
+  const pg = ed.pages[i];
+  ed.strokes = JSON.parse(JSON.stringify(pg.strokes || []));
+  await setImage(pg.image, true);
+}
+function renderPageStrip() {
+  const n = ed.pages.length, box = $('#pageStrip');
+  box.hidden = n === 0;
+  if (!n) return;
+  box.innerHTML = '<span class="lbl">사진</span>' +
+    ed.pages.map((_, i) => `<button class="pg ${i === ed.cur ? 'on' : ''}" data-pg="${i}">${i + 1}쪽</button>`).join('') +
+    '<button class="add" data-pick="cam" data-target="memoadd">＋📷 다음 쪽 촬영</button>' +
+    '<button class="add" data-pick="album" data-target="memoadd">＋🖼 앨범</button>';
+  $('#tDelPage').hidden = false;
+}
+$('#pageStrip').addEventListener('click', e => {
+  const b = e.target.closest('[data-pg]'); if (!b) return;
+  const i = +b.dataset.pg; if (i !== ed.cur) showPage(i);
+});
 const HELP_MSG = '▭ 사각형: 원하는 부분을 손가락으로 대각선으로 끌어 상자를 그리세요 (여러 개 가능). ✏️ 형광펜: 줄을 따라 칠하세요. 그다음 [선택 부분만 글자로].';
 async function openEditor(a, b) {
   let memo = null, bookId = b;
@@ -538,8 +584,9 @@ async function openEditor(a, b) {
   $('#fText').value = memo?.text || ''; $('#fNote').value = memo?.note || '';
   $('#mDel').hidden = !memo;
   $('#cinner').classList.remove('zoom'); $('#tZoom').classList.remove('on');
-  if (memo?.image) { ed.strokes = JSON.parse(JSON.stringify(memo.strokes || [])); await setImage(memo.image, true); }
-  else if (!memo && pendingImage) { const d = pendingImage; pendingImage = null; await setImage(d, false); }
+  ed.pages = JSON.parse(JSON.stringify(pagesOf(memo))); ed.cur = 0; ed.image = null;
+  if (!memo && pendingImage) { ed.pages = [{ image: pendingImage, strokes: [] }]; pendingImage = null; }
+  if (ed.pages.length) { ed.strokes = JSON.parse(JSON.stringify(ed.pages[0].strokes || [])); await setImage(ed.pages[0].image, true); }
   else clearImage();
   ocrMsg(HELP_MSG);
 }
@@ -551,11 +598,14 @@ async function setImage(dataUrl, keepStrokes) {
   cvBase.getContext('2d').drawImage(img, 0, 0);
   if (!keepStrokes) ed.strokes = [];
   ed.image = dataUrl;
+  if (!ed.pages.length) { ed.pages = [{ image: dataUrl, strokes: [] }]; ed.cur = 0; }
+  ed.pages[ed.cur].image = dataUrl;
   redrawOv();
   $('#noImg').hidden = true; $('#imgBox').hidden = false;
   setMode(lastMode());
+  renderPageStrip();
 }
-function clearImage() { ed.image = null; ed.strokes = []; $('#noImg').hidden = false; $('#imgBox').hidden = true; }
+function clearImage() { ed.image = null; ed.strokes = []; ed.pages = []; ed.cur = 0; $('#noImg').hidden = false; $('#imgBox').hidden = true; renderPageStrip(); }
 function drawStroke(ctx, s) {
   if (s.r) {
     ctx.fillStyle = '#ffd000'; ctx.fillRect(s.r[0], s.r[1], s.r[2], s.r[3]);
@@ -633,7 +683,18 @@ async function rotateMemo(cw) {
 }
 $('#tRotL').onclick = () => rotateMemo(false);
 $('#tRotR').onclick = () => rotateMemo(true);
-$('#tChange').onclick = () => { if (confirm('사진을 바꾸면 형광펜 표시가 지워집니다. 바꿀까요?')) clearImage(); };
+$('#tChange').onclick = () => {
+  if (!confirm(`${ed.cur + 1}쪽 사진을 다른 사진으로 바꿀까요? (이 쪽의 선택 표시는 지워집니다)`)) return;
+  pickFor = 'memoreplace'; const inp = $('#fAlbum'); inp.value = ''; inp.click();
+};
+$('#tDelPage').onclick = async () => {
+  if (!confirm(`${ed.cur + 1}쪽 사진을 이 메모에서 뺄까요?`)) return;
+  ed.pages.splice(ed.cur, 1); ed.image = null;
+  if (!ed.pages.length) { clearImage(); return; }
+  ed.cur = Math.max(0, ed.cur - 1);
+  const pg = ed.pages[ed.cur]; ed.strokes = JSON.parse(JSON.stringify(pg.strokes || []));
+  await setImage(pg.image, true);
+};
 
 /* 선택 영역 → 사각형 목록 (형광펜은 칠한 줄을 감싸는 사각형으로 바꿔 글자가 잘리지 않게) */
 function selRegions() {
@@ -859,11 +920,13 @@ $('#ocrAll').onclick = () => runOcr('all');
 /* ---------- 메모 저장/삭제 ---------- */
 $('#mSave').onclick = async () => {
   const text = $('#fText').value.trim(), note = $('#fNote').value.trim();
-  if (!ed.image && !text && !note) { toast('사진이나 글을 넣어 주세요'); return; }
+  if (!ed.pages.length && !text && !note) { toast('사진이나 글을 넣어 주세요'); return; }
+  syncCur();
   const now = Date.now();
   const m = ed.memo ? { ...ed.memo } : { id: uid(), bookId: ed.bookId, createdAt: now };
+  delete m.image; delete m.strokes;   // 사진은 pages 안에만 보관 (중복 저장 방지)
   Object.assign(m, {
-    image: ed.image, strokes: ed.image ? ed.strokes : [], thumb: ed.image ? composite(800) : null,
+    pages: ed.pages, thumb: ed.pages[0]?.thumb || null,
     text, note, page: $('#fPage').value.trim(), date: $('#fDate').value || today(), updatedAt: now
   });
   try {
@@ -896,7 +959,7 @@ function backupHtml(data) {
     "var h='';d.books.sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0)}).forEach(function(b){" +
     "var ms=d.memos.filter(function(m){return m.bookId===b.id}).sort(function(x,y){return (y.date||'').localeCompare(x.date||'')});" +
     "h+='<div class=\"bk\">'+(b.cover?'<img src=\"'+b.cover+'\">':'')+'<div><h2>'+e(b.title)+'</h2><div class=\"d\">'+e(b.author)+(b.category?' · '+e(b.category):'')+' · 메모 '+ms.length+'개</div></div></div>';" +
-    "ms.forEach(function(m){h+='<div class=\"m\"><div class=\"d\">'+e(m.date)+(m.page?' · p.'+e(m.page):'')+'</div>'+(m.thumb?'<img src=\"'+m.thumb+'\">':'')+(m.text?'<div class=\"t\">'+e(m.text)+'</div>':'')+(m.note?'<div class=\"n\">💭 '+e(m.note)+'</div>':'')+'</div>'})});" +
+    "ms.forEach(function(m){h+='<div class=\"m\"><div class=\"d\">'+e(m.date)+(m.page?' · p.'+e(m.page):'')+'</div>'+((m.pages&&m.pages.length)?m.pages.map(function(p){return p.thumb?'<img src=\"'+p.thumb+'\">':''}).join(''):(m.thumb?'<img src=\"'+m.thumb+'\">':''))+(m.text?'<div class=\"t\">'+e(m.text)+'</div>':'')+(m.note?'<div class=\"n\">💭 '+e(m.note)+'</div>':'')+'</div>'})});" +
     "document.getElementById('out').innerHTML=h||'<p>메모가 없습니다</p>';";
   return '<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>독서메모 백업 ' + data.exportedAt.slice(0, 10) + '</title><style>body{font-family:sans-serif;max-width:860px;margin:auto;padding:16px;color:#222}' +
