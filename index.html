@@ -47,13 +47,15 @@ main{max-width:1000px;margin:0 auto;padding:14px 14px 100px}
 .cnt{flex:none;text-align:center;min-width:52px;background:var(--g2);border-radius:10px;padding:6px 4px}
 .cnt b{display:block;font-size:20px;color:var(--g);line-height:1.1}
 .cnt small{font-size:11px;color:var(--g)}
-.ract{display:flex;gap:4px;flex:none}
-.rmemo{display:flex;flex-direction:column;align-items:center;padding:6px 8px;font-size:18px;line-height:1.1;border-radius:10px;background:var(--g);border-color:var(--g);color:#fff}
-.rmemo small{font-size:11px;color:#fff}
+.cvwrap{position:relative;flex:none}
+.cbadge{position:absolute;right:-6px;bottom:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:var(--g);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.ract{display:flex;gap:6px;flex:none}
+.rmemo{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:64px;min-height:64px;padding:8px 10px;font-size:24px;line-height:1.1;border-radius:12px;background:var(--g);border-color:var(--g);color:#fff}
+.rmemo small{font-size:13px;color:#fff;font-weight:700;margin-top:3px}
 .addmemo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
 .addmemo button{padding:16px 8px;font-size:16px;font-weight:700}
-.redit{flex:none;display:flex;flex-direction:column;align-items:center;padding:6px 8px;font-size:18px;line-height:1.1;border-radius:10px}
-.redit small{font-size:11px;color:var(--sub)}
+.redit{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:64px;min-height:64px;padding:8px 10px;font-size:24px;line-height:1.1;border-radius:12px}
+.redit small{font-size:13px;color:var(--txt);font-weight:700;margin-top:3px}
 .empty{color:var(--sub);text-align:center;padding:14px}
 .empty.big{padding:60px 10px;line-height:1.8}
 .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;background:var(--g);color:#fff;border:none;border-radius:28px;padding:14px 20px;font-weight:700;font-size:16px;box-shadow:0 4px 12px rgba(0,0,0,.25)}
@@ -166,6 +168,8 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
             <button id="tUndo">↶ 되돌리기</button>
             <button id="tClear">지우기</button>
             <button id="tZoom">🔍 확대</button>
+            <button id="tRotL">⟲ 왼쪽</button>
+            <button id="tRotR">⟳ 오른쪽</button>
             <button id="tChange">📷 사진 바꾸기</button>
           </div>
           <div class="cwrap" id="cwrap"><div class="cinner" id="cinner"><canvas id="cvBase"></canvas><canvas id="cvOv"></canvas></div></div>
@@ -206,6 +210,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
       <div class="row" style="flex-direction:column;align-items:stretch">
         <button data-pick="cam" data-target="cover">📷 표지 촬영</button>
         <button data-pick="album" data-target="cover">🖼 표지 불러오기</button>
+        <button id="coverRot" class="sm" hidden>⟳ 표지 회전</button>
         <button id="coverDel" class="sm danger" hidden>표지 삭제</button>
       </div>
     </div>
@@ -245,6 +250,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 <script>
 'use strict';
 const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+const MEMO_MAX = 3600, MEMO_Q = 0.93;   // 메모 사진: 긴 변 최대 3600픽셀, 고화질 (OCR 정확도용)
 const DEFAULT_CATS = ['주식','경제·경영','자기계발','소설','시','에세이','인문','역사','과학','기타'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -345,11 +351,10 @@ function coverHtml(b, cls = 'cover') {
   return b.cover ? `<img class="${cls}" src="${b.cover}" alt="">` : `<div class="${cls} nocover">${esc((b.title || '?').slice(0, 4))}</div>`;
 }
 function bookRow(b, n, q) {
-  return `<a class="bookrow" href="#book/${b.id}">${coverHtml(b)}
+  return `<a class="bookrow" href="#book/${b.id}"><div class="cvwrap">${coverHtml(b)}<span class="cbadge" title="독서메모 ${n}개">${n}</span></div>
     <div class="bi"><div class="bt">${hl(b.title, q)}</div>
     ${b.author ? `<div class="ba">${hl(b.author, q)}</div>` : ''}
     ${b.category ? `<span class="tag">${esc(b.category)}</span>` : ''}</div>
-    <div class="cnt"><b>${n}</b><small>메모</small></div>
     <div class="ract"><button class="rmemo" data-pick="album" data-target="newmemo" data-book="${b.id}">📷<small>메모</small></button>
     <button class="redit" data-edit="${b.id}" title="책 정보 수정">✏️<small>수정</small></button></div></a>`;
 }
@@ -444,14 +449,19 @@ async function openBookForm(b) {
   $('#catList').innerHTML = [...new Set([...used, ...DEFAULT_CATS])].map(c => `<option value="${esc(c)}">`).join('');
   updateCoverPreview();
   $('#mBook').hidden = false;
-  if (!b) setTimeout(() => $('#bTitle').focus(), 50);
+  if (!b) setTimeout(() => { const ae = document.activeElement; if (!ae || !$('#mBook').contains(ae) || ae.tagName === 'BUTTON') $('#bTitle').focus(); }, 50);
 }
 function updateCoverPreview() {
   $('#coverPrev').innerHTML = coverHtml({ cover: bookForm.cover, title: $('#bTitle').value || '표지' }, 'cover lg');
-  $('#coverDel').hidden = !bookForm.cover;
+  $('#coverDel').hidden = !bookForm.cover; $('#coverRot').hidden = !bookForm.cover;
 }
 $('#fabBook').onclick = () => openBookForm(null);
 $('#bCancel').onclick = () => { $('#mBook').hidden = true; };
+$('#coverRot').onclick = async () => {
+  const img = await loadImg(bookForm.cover), c = mk(img.naturalHeight, img.naturalWidth), x = c.getContext('2d');
+  x.translate(c.width, 0); x.rotate(Math.PI / 2); x.drawImage(img, 0, 0);
+  bookForm.cover = c.toDataURL('image/jpeg', 0.9); updateCoverPreview();
+};
 $('#coverDel').onclick = () => { bookForm.cover = null; updateCoverPreview(); };
 $('#bTitle').addEventListener('input', () => { if (!bookForm.cover) updateCoverPreview(); });
 $('#bSave').onclick = async () => {
@@ -480,11 +490,11 @@ async function onPicked(e) {
     if (pickFor === 'cover') { bookForm.cover = await fileToDataURL(f, 600, 0.85); updateCoverPreview(); }
     else if (pickFor === 'newmemo') {
       toast('사진 불러오는 중…');
-      pendingImage = await fileToDataURL(f, 2000, 0.88);
+      pendingImage = await fileToDataURL(f, MEMO_MAX, MEMO_Q);
       const target = '#memo/new/' + pickBook;
       if (location.hash === target) route(); else location.hash = target;
     }
-    else { toast('사진 불러오는 중…'); await setImage(await fileToDataURL(f, 2000, 0.88), false); }
+    else { toast('사진 불러오는 중…'); await setImage(await fileToDataURL(f, MEMO_MAX, MEMO_Q), false); }
   } catch (err) { console.warn(err); toast('사진을 읽지 못했습니다: ' + (err.message || err), 6000); }
 }
 $('#fCam').addEventListener('change', onPicked);
@@ -585,6 +595,22 @@ $('#mMove').onclick = () => setMode('move');
 $('#tUndo').onclick = () => { ed.strokes.pop(); redrawOv(); };
 $('#tClear').onclick = () => { ed.strokes = []; redrawOv(); };
 $('#tZoom').onclick = () => { const z = $('#cinner').classList.toggle('zoom'); $('#tZoom').classList.toggle('on', z); if (z) toast('확대: [✋ 이동]을 누르면 사진을 움직일 수 있습니다', 3000); };
+/* 사진 90° 회전 (선택 상자·형광펜도 함께 돌림) */
+async function rotateMemo(cw) {
+  if (!ed.image) return;
+  const W = cvBase.width, H = cvBase.height;
+  const c = mk(H, W), x = c.getContext('2d');
+  x.translate(cw ? H : 0, cw ? 0 : W); x.rotate(cw ? Math.PI / 2 : -Math.PI / 2);
+  x.drawImage(cvBase, 0, 0);
+  const pt = ([px, py]) => cw ? [H - py, px] : [py, W - px];
+  const strokes = ed.strokes.map(s => s.r
+    ? { r: cw ? [H - s.r[1] - s.r[3], s.r[0], s.r[3], s.r[2]] : [s.r[1], W - s.r[0] - s.r[2], s.r[3], s.r[2]] }
+    : { w: s.w, pts: s.pts.map(pt) });
+  await setImage(c.toDataURL('image/jpeg', 0.95), false);
+  ed.strokes = strokes; redrawOv();
+}
+$('#tRotL').onclick = () => rotateMemo(false);
+$('#tRotR').onclick = () => rotateMemo(true);
 $('#tChange').onclick = () => { if (confirm('사진을 바꾸면 형광펜 표시가 지워집니다. 바꿀까요?')) clearImage(); };
 
 /* 선택 영역 → 사각형 목록 (형광펜은 칠한 줄을 감싸는 사각형으로 바꿔 글자가 잘리지 않게) */
