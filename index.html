@@ -97,6 +97,8 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 #cvOv.off{pointer-events:none}
 .ocrbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .ocrbtns button{padding:12px 8px}
+.engopt{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin:8px 0 0}
+.engopt input{width:auto;margin:0}
 .ocrmsg{font-size:13px;color:var(--g);min-height:18px;margin-top:6px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .savebar{display:flex;gap:8px;margin-top:14px}
@@ -163,6 +165,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
             <button id="ocrHl" class="primary">선택 부분만 글자로</button>
             <button id="ocrAll">사진 전체 글자로</button>
           </div>
+          <label class="engopt"><input type="checkbox" id="optEng"> 영어 문장이 많은 책 (영어도 함께 인식)</label>
           <div id="ocrMsg" class="ocrmsg"></div>
         </div>
       </div>
@@ -607,37 +610,49 @@ function selRegions() {
   rs.sort((a, b) => Math.abs((a[1] + a[3] / 2) - (b[1] + b[3] / 2)) < Math.min(a[3], b[3]) / 2 ? a[0] - b[0] : a[1] - b[1]);
   return rs;
 }
-/* OCR 전처리: 확대 → 흑백 → 그림자 보정(적응형 이진화) → 흰 여백 */
-function prepRegion(x, y, w, h, binarize) {
-  const sc = Math.max(1, Math.min(3, 1800 / w, 4000 / h));
-  const W = Math.round(w * sc), H = Math.round(h * sc), pad = 24;
-  const c = mk(W + pad * 2, H + pad * 2), cx = c.getContext('2d', { willReadFrequently: true });
-  cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+/* OCR 전처리
+   ratio 없음 → 확대한 원본 그대로
+   ratio 있음 → 주변 '종이 밝기'로 나눠 그림자·회색 밑줄(형광펜)을 지우고 진한 글자만 남김 */
+function prepRegion(x, y, w, h, ratio) {
+  // 사진 자체가 작을 때만 키움 (충분히 큰 사진을 키우면 오히려 흐려져 정확도가 떨어짐)
+  const sc = cvBase.width < 1500 ? Math.min(2, 1800 / cvBase.width) : 1;
+  const CW = Math.round(w * sc), CH = Math.round(h * sc), pad = 24;
+  const c = mk(CW, CH), cx = c.getContext('2d', { willReadFrequently: true });
   cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
-  cx.drawImage(cvBase, x, y, w, h, pad, pad, W, H);
-  if (binarize === false) return c;
-  const id = cx.getImageData(0, 0, c.width, c.height), d = id.data, CW = c.width, CH = c.height;
-  const g = new Float32Array(CW * CH);
-  for (let i = 0, j = 0; i < g.length; i++, j += 4) g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
-  // 적적분 영상으로 주변 평균 밝기 계산 (Bradley 방식)
-  const S = new Float64Array((CW + 1) * (CH + 1));
-  for (let yy = 0; yy < CH; yy++) {
-    let row = 0;
-    for (let xx = 0; xx < CW; xx++) { row += g[yy * CW + xx]; S[(yy + 1) * (CW + 1) + xx + 1] = S[yy * (CW + 1) + xx + 1] + row; }
-  }
-  const half = Math.max(12, Math.min(90, Math.round(Math.max(CW, CH) / 24)));
-  for (let yy = 0; yy < CH; yy++) {
-    const ya = Math.max(0, yy - half), yb = Math.min(CH, yy + half + 1);
-    for (let xx = 0; xx < CW; xx++) {
-      const xa = Math.max(0, xx - half), xb = Math.min(CW, xx + half + 1);
-      const sum = S[yb * (CW + 1) + xb] - S[ya * (CW + 1) + xb] - S[yb * (CW + 1) + xa] + S[ya * (CW + 1) + xa];
-      const mean = sum / ((xb - xa) * (yb - ya));
-      const v = g[yy * CW + xx] < mean * 0.85 ? 0 : 255, k = (yy * CW + xx) * 4;
-      d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255;
+  cx.drawImage(cvBase, x, y, w, h, 0, 0, CW, CH);
+  if (ratio) {
+    const id = cx.getImageData(0, 0, CW, CH), d = id.data, N = CW * CH;
+    const g = new Float32Array(N);
+    for (let i = 0, j = 0; i < N; i++, j += 4) g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+    const half = Math.max(20, Math.min(100, Math.round(CW / 30)));
+    const tmp = new Float32Array(N), bg = new Float32Array(N);
+    for (let yy = 0; yy < CH; yy++) {
+      const o = yy * CW;
+      for (let xx = 0; xx < CW; xx++) {
+        let m = 0; const a1 = Math.max(0, xx - half), b1 = Math.min(CW - 1, xx + half);
+        for (let k = a1; k <= b1; k += 2) if (g[o + k] > m) m = g[o + k];
+        tmp[o + xx] = m;
+      }
     }
+    for (let xx = 0; xx < CW; xx++) {
+      for (let yy = 0; yy < CH; yy++) {
+        let m = 0; const a1 = Math.max(0, yy - half), b1 = Math.min(CH - 1, yy + half);
+        for (let k = a1; k <= b1; k += 2) if (tmp[k * CW + xx] > m) m = tmp[k * CW + xx];
+        bg[yy * CW + xx] = m;
+      }
+    }
+    for (let i = 0; i < N; i++) { const v = g[i] / Math.max(1, bg[i]) < ratio ? 0 : 255; d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
+    cx.putImageData(id, 0, 0);
   }
-  cx.putImageData(id, 0, 0);
-  return c;
+  const o = mk(CW + pad * 2, CH + pad * 2), ox = o.getContext('2d');
+  ox.fillStyle = '#fff'; ox.fillRect(0, 0, o.width, o.height); ox.drawImage(c, pad, pad);
+  return o;
+}
+/* 확신도가 아주 낮은 줄(흐린 옆 페이지, 잘린 줄 등)은 버림 */
+function goodLines(data, minConf) {
+  if (!Array.isArray(data.lines) || !data.lines.length) return data.text;
+  const keep = data.lines.filter(l => (l.confidence || 0) >= minConf && /[가-힣A-Za-z0-9]/.test(l.text));
+  return keep.length ? keep.map(l => l.text.trim()).join('\n') : data.text;
 }
 /* 한글 글자 사이에 잘못 들어간 띄어쓰기 정리 (한 글자씩 끊긴 경우만) */
 function fixKoSpacing(t) {
@@ -661,14 +676,17 @@ function composite(maxW) {
 let worker = null, ocrBusy = false, ocrPrefix = '';
 function ocrMsg(t) { $('#ocrMsg').textContent = t; }
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('OCR 엔진을 불러오지 못했습니다')); document.head.appendChild(s); }); }
+function ocrLang() { try { return localStorage.getItem('ocrEng') === '1' ? ['kor', 'eng'] : ['kor']; } catch (_) { return ['kor']; } }
 async function getWorker() {
-  if (worker) return worker;
+  if (worker && worker._lang === ocrLang().join('+')) return worker;
+  if (worker) { try { await worker.terminate(); } catch (_) {} worker = null; }
   ocrMsg('OCR 엔진 준비 중… (처음 한 번은 한글 데이터를 내려받느라 30초~1분 걸릴 수 있습니다)');
   if (!window.Tesseract) await loadScript(TESS_URL);
-  worker = await Tesseract.createWorker(['kor', 'eng'], 1, {
+  worker = await Tesseract.createWorker(ocrLang(), 1, {
     logger: m => { if (m.status === 'recognizing text') ocrMsg(ocrPrefix + '글자 인식 중… ' + Math.round(m.progress * 100) + '%'); }
   });
   await worker.setParameters({ preserve_interword_spaces: '1' });
+  worker._lang = ocrLang().join('+');
   return worker;
 }
 function cleanText(t) {
@@ -693,14 +711,16 @@ async function runOcr(mode) {
       ocrPrefix = regions.length > 1 ? `(${i + 1}/${regions.length}) ` : '';
       ocrMsg(ocrPrefix + '글자 인식 중…');
       await w.setParameters({ tessedit_pageseg_mode: mode === 'hl' ? '6' : '3' });
-      // 1차: 원본 흑백 그대로 → 확신도가 낮으면 2차: 그림자 보정(이진화) 후 다시, 더 나은 쪽 사용
-      let { data } = await w.recognize(prepRegion(x, y, rw, rh, false));
-      if ((data.confidence || 0) < 85) {
-        ocrMsg(ocrPrefix + '보정해서 한 번 더 인식 중…');
-        const r2 = (await w.recognize(prepRegion(x, y, rw, rh, true))).data;
-        if ((r2.confidence || 0) > (data.confidence || 0)) data = r2;
+      // ① 원본 그대로 ② 밑줄·그림자 지운 것 (필요하면 ③ 더 강하게) → 확신도 가장 높은 결과 사용
+      let data = null;
+      const tries = [0.5, 0, 0.4];
+      for (let k = 0; k < tries.length; k++) {
+        if (k === 2 && data.confidence >= 80) break;
+        if (k > 0) ocrMsg(ocrPrefix + `보정해서 다시 인식 중… (${k + 1}/3)`);
+        const r = (await w.recognize(prepRegion(x, y, rw, rh, tries[k]))).data;
+        if (!data || (r.confidence || 0) > (data.confidence || 0)) data = r;
       }
-      const t = cleanText(fixKoSpacing(data.text));
+      const t = cleanText(fixKoSpacing(goodLines(data, mode === 'hl' ? 15 : 30)));
       if (t) parts.push(t);
     }
     ocrPrefix = '';
@@ -718,6 +738,8 @@ async function runOcr(mode) {
     else ocrMsg('⚠️ 변환 실패: ' + m + ' — 인터넷 연결을 확인하세요(첫 사용 시 필요).');
   } finally { ocrBusy = false; ocrPrefix = ''; $('#ocrHl').disabled = $('#ocrAll').disabled = false; }
 }
+try { $('#optEng').checked = localStorage.getItem('ocrEng') === '1'; } catch (_) {}
+$('#optEng').onchange = e => { try { localStorage.setItem('ocrEng', e.target.checked ? '1' : '0'); } catch (_) {} };
 $('#ocrHl').onclick = () => runOcr('hl');
 $('#ocrAll').onclick = () => runOcr('all');
 
