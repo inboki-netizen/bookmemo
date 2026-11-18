@@ -79,6 +79,9 @@ main{max-width:1000px;margin:0 auto;padding:14px 14px 100px}
 mark{background:#ffe066;padding:0 1px;border-radius:2px}
 .edhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .edhead button{color:var(--g);border:none;background:none;font-weight:600;padding:4px 0}
+.movebtn{margin-left:auto;flex:none;background:#fff!important;border:1px solid var(--g)!important;color:var(--g)!important;border-radius:10px!important;padding:8px 10px!important;font-size:14px;font-weight:700}
+.mvlist .bookrow{cursor:pointer;margin-top:8px}
+.mvlist .bookrow.cur{opacity:.5}
 .edhead b{font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .edgrid{display:grid;grid-template-columns:1fr;gap:14px}
 @media(min-width:900px){.edgrid{grid-template-columns:1.25fr 1fr}}
@@ -138,7 +141,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 </head>
 <body>
 <header class="top">
-  <a href="#" class="logo">📚 독서메모 <small class="ver">v11 · 11/18</small></a>
+  <a href="#" class="logo">📚 독서메모 <small class="ver">v13 · 11/18</small></a>
   <button id="btnBackup" class="ghost">☁️ 백업</button>
 </header>
 
@@ -161,7 +164,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 
   <!-- 메모 작성/수정 -->
   <section id="vEdit" class="view" hidden>
-    <div class="edhead"><button id="edBack">← 뒤로</button><b id="edTitle"></b></div>
+    <div class="edhead"><button id="edBack">← 뒤로</button><b id="edTitle"></b><button id="edMove" class="movebtn">↪ 다른 책으로 옮기기</button></div>
     <div class="edgrid">
       <div class="card">
         <div id="noImg" class="noimg">
@@ -239,6 +242,16 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
   </div>
 </div>
 
+<!-- 메모 옮기기 -->
+<div id="mMoveBook" class="modal" hidden>
+  <div class="sheet">
+    <h3>↪ 이 메모를 어느 책으로 옮길까요?</h3>
+    <div class="help" style="margin-top:4px">책을 누르면 바로 옮겨지고 저장됩니다.</div>
+    <div id="mvList" class="mvlist"></div>
+    <button id="mvClose" class="bigbtn">취소</button>
+  </div>
+</div>
+
 <!-- 구글 렌즈 -->
 <div id="mLens" class="modal" hidden>
   <div class="sheet">
@@ -272,6 +285,11 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
     </div>
     <button id="bkImport" class="bigbtn">② 백업 불러오기 (PC · 새 핸드폰)</button>
     <div class="help">드라이브에서 받은 백업 파일을 선택하면 이 기기의 메모와 <b>합쳐집니다</b>(같은 메모는 최신 것으로 유지).</div>
+    <div class="row" style="margin-top:6px">
+      <button id="xlsText" class="bigbtn" style="flex:1">📊 엑셀로 (글만)</button>
+      <button id="xlsImg" class="bigbtn" style="flex:1">📊 엑셀로 (사진 포함)</button>
+    </div>
+    <div class="help">책 제목·저자·분류·날짜·페이지·구절·내 생각을 엑셀 표로 만듭니다. '사진 포함'은 칸 안에 작은 사진이 들어가 파일이 커집니다. 엑셀 파일은 보기·정리용이며, 다시 불러오기는 ② 백업 파일로 하세요.</div>
     <button id="bkClose" class="bigbtn">닫기</button>
   </div>
 </div>
@@ -598,6 +616,22 @@ async function openEditor(a, b) {
   ocrMsg(HELP_MSG);
 }
 $('#edBack').onclick = () => { location.hash = '#book/' + ed.bookId; };
+$('#edMove').onclick = async () => {
+  const books = (await getAll('books')).sort((x, y) => (x.title || '').localeCompare(y.title || '', 'ko'));
+  if (books.length < 2) { toast('옮길 다른 책이 없습니다. 메인 화면에서 [＋ 책 추가]로 먼저 만들어 주세요', 4000); return; }
+  $('#mvList').innerHTML = books.map(b => `<div class="bookrow ${b.id === ed.bookId ? 'cur' : ''}" data-mv="${b.id}">${coverHtml(b)}
+    <div class="bi"><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}
+    ${b.id === ed.bookId ? '<span class="tag">지금 이 책</span>' : ''}</div></div>`).join('');
+  $('#mMoveBook').hidden = false;
+};
+$('#mvClose').onclick = () => { $('#mMoveBook').hidden = true; };
+$('#mvList').addEventListener('click', e => {
+  const r = e.target.closest('[data-mv]'); if (!r) return;
+  if (r.dataset.mv === ed.bookId) { toast('지금 들어 있는 책입니다'); return; }
+  $('#fBook').value = r.dataset.mv;
+  $('#mMoveBook').hidden = true;
+  $('#mSave').click();
+});
 async function setImage(dataUrl, keepStrokes) {
   const img = await loadImg(dataUrl);
   cvBase.width = cvOv.width = img.naturalWidth;
@@ -1005,6 +1039,75 @@ $('#bkExport').onclick = async () => {
   } catch (e) { console.error(e); toast('백업 실패: ' + (e.message || e), 4000); }
   finally { btn.disabled = false; }
 };
+/* ---------- 엑셀 내보내기 ---------- */
+const XLS_URL = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+async function exportExcel(withImg, btn) {
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '만드는 중…';
+  try {
+    if (!window.ExcelJS) await loadScript(XLS_URL);
+    const [books, memos] = await Promise.all([getAll('books'), getAll('memos')]);
+    const byId = Object.fromEntries(books.map(b => [b.id, b]));
+    const wb = new ExcelJS.Workbook(); wb.creator = '독서메모';
+    const head = ws => {
+      const r = ws.getRow(1); r.font = { bold: true, color: { argb: 'FFFFFFFF' } }; r.height = 22;
+      r.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2F5D50' } };
+      r.alignment = { vertical: 'middle', horizontal: 'center' };
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+    };
+    // 시트1: 메모
+    const ws = wb.addWorksheet('독서메모');
+    const cols = [
+      { header: '책 제목', key: 'title', width: 24 }, { header: '저자', key: 'author', width: 14 },
+      { header: '분류', key: 'cat', width: 10 }, { header: '날짜', key: 'date', width: 12 },
+      { header: '페이지', key: 'page', width: 8 }, { header: '구절', key: 'text', width: 60 },
+      { header: '내 생각', key: 'note', width: 30 }, { header: '사진 수', key: 'n', width: 8 }];
+    if (withImg) cols.push({ header: '사진', key: 'img', width: 24 });
+    ws.columns = cols; head(ws);
+    const list = memos.slice().sort((a, b) => {
+      const ta = (byId[a.bookId] || {}).title || '', tb = (byId[b.bookId] || {}).title || '';
+      return ta.localeCompare(tb, 'ko') || (a.date || '').localeCompare(b.date || '');
+    });
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i], b = byId[m.bookId] || {}, pages = pagesOf(m);
+      const row = ws.addRow({ title: b.title || '', author: b.author || '', cat: b.category || '', date: m.date || '',
+        page: m.page || '', text: m.text || '', note: m.note || '', n: pages.length });
+      row.alignment = { vertical: 'top', wrapText: true };
+      const thumb = m.thumb || (pages[0] && pages[0].thumb);
+      if (withImg && thumb) {
+        const im = await loadImg(thumb), w = 160, h = Math.round(160 * im.naturalHeight / im.naturalWidth);
+        const id = wb.addImage({ base64: thumb, extension: 'jpeg' });
+        ws.addImage(id, { tl: { col: cols.length - 1 + 0.05, row: row.number - 1 + 0.05 }, ext: { width: w, height: h } });
+        row.height = Math.max(row.height || 15, h * 0.75 + 6);
+      }
+    }
+    ws.autoFilter = { from: 'A1', to: { row: 1, column: cols.length } };
+    // 시트2: 책 목록
+    const wsb = wb.addWorksheet('책 목록');
+    wsb.columns = [{ header: '책 제목', key: 'title', width: 28 }, { header: '저자', key: 'author', width: 16 },
+      { header: '분류', key: 'cat', width: 12 }, { header: '메모 수', key: 'n', width: 9 }, { header: '최근 수정', key: 'upd', width: 18 }];
+    head(wsb);
+    const cnt = {}; memos.forEach(m => cnt[m.bookId] = (cnt[m.bookId] || 0) + 1);
+    books.slice().sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ko')).forEach(b => wsb.addRow({
+      title: b.title, author: b.author || '', cat: b.category || '', n: cnt[b.id] || 0,
+      upd: b.updatedAt ? new Date(b.updatedAt).toLocaleString('ko-KR') : '' }));
+    const buf = await wb.xlsx.writeBuffer();
+    const name = '독서메모_' + today().replace(/-/g, '') + (withImg ? '_사진포함' : '') + '.xlsx';
+    const file = new File([buf], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    let shared = false;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: name }); shared = true; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    if (!shared) {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast('엑셀 파일을 저장했습니다 (내 파일 → 다운로드)', 4000);
+    }
+  } catch (e) { console.warn(e); toast('엑셀 만들기 실패: ' + (e.message || e) + ' (인터넷 연결 확인)', 5000); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+$('#xlsText').onclick = e => exportExcel(false, e.currentTarget);
+$('#xlsImg').onclick = e => exportExcel(true, e.currentTarget);
 $('#bkImport').onclick = () => { $('#fImport').value = ''; $('#fImport').click(); };
 $('#fImport').addEventListener('change', async e => {
   const f = e.target.files && e.target.files[0]; if (!f) return;
