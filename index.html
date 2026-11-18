@@ -83,6 +83,10 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 .tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
 .tools button{padding:8px 10px;font-size:14px}
 .tools .on{background:#fff3b0;border-color:#e6c200;font-weight:700}
+.seg{display:inline-flex}
+.seg button{border-radius:0;margin-left:-1px}
+.seg button:first-child{border-radius:10px 0 0 10px;margin-left:0}
+.seg button:last-child{border-radius:0 10px 10px 0}
 .pen{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub)}
 .pen input{width:90px;padding:0}
 .cwrap{overflow:auto;max-height:72vh;border-radius:8px;background:#222;-webkit-overflow-scrolling:touch}
@@ -147,8 +151,8 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
         </div>
         <div id="imgBox" hidden>
           <div class="tools">
-            <button id="tPen" class="on">✏️ 형광펜</button>
-            <span class="pen">굵기 <input id="penSize" type="range" min="8" max="60" value="22"></span>
+            <span class="seg"><button id="mRect">▭ 사각형</button><button id="mPen">✏️ 형광펜</button><button id="mMove">✋ 이동</button></span>
+            <span class="pen" id="penBox">굵기 <input id="penSize" type="range" min="8" max="60" value="22"></span>
             <button id="tUndo">↶ 되돌리기</button>
             <button id="tClear">지우기</button>
             <button id="tZoom">🔍 확대</button>
@@ -156,10 +160,10 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
           </div>
           <div class="cwrap" id="cwrap"><div class="cinner" id="cinner"><canvas id="cvBase"></canvas><canvas id="cvOv"></canvas></div></div>
           <div class="ocrbtns">
-            <button id="ocrHl" class="primary">형광펜 부분만 글자로</button>
+            <button id="ocrHl" class="primary">선택 부분만 글자로</button>
             <button id="ocrAll">사진 전체 글자로</button>
           </div>
-          <div id="ocrMsg" class="ocrmsg">형광펜으로 원하는 줄을 칠한 뒤 [형광펜 부분만 글자로]를 누르세요.</div>
+          <div id="ocrMsg" class="ocrmsg"></div>
         </div>
       </div>
       <div class="card">
@@ -475,7 +479,8 @@ $('#fAlbum').addEventListener('change', onPicked);
 
 /* ---------- 메모 편집 + 형광펜 ---------- */
 const cvBase = $('#cvBase'), cvOv = $('#cvOv');
-const ed = { memo: null, bookId: null, strokes: [], image: null, pen: true };
+const ed = { memo: null, bookId: null, strokes: [], image: null, mode: 'rect' };
+const HELP_MSG = '▭ 사각형: 원하는 부분을 손가락으로 대각선으로 끌어 상자를 그리세요 (여러 개 가능). ✏️ 형광펜: 줄을 따라 칠하세요. 그다음 [선택 부분만 글자로].';
 async function openEditor(a, b) {
   let memo = null, bookId = b;
   if (a !== 'new') { memo = await get('memos', a); if (!memo) { location.hash = ''; return; } bookId = memo.bookId; }
@@ -491,7 +496,7 @@ async function openEditor(a, b) {
   if (memo?.image) { ed.strokes = JSON.parse(JSON.stringify(memo.strokes || [])); await setImage(memo.image, true); }
   else if (!memo && pendingImage) { const d = pendingImage; pendingImage = null; await setImage(d, false); }
   else clearImage();
-  ocrMsg('형광펜으로 원하는 줄을 칠한 뒤 [형광펜 부분만 글자로]를 누르세요.');
+  ocrMsg(HELP_MSG);
 }
 $('#edBack').onclick = () => { location.hash = '#book/' + ed.bookId; };
 async function setImage(dataUrl, keepStrokes) {
@@ -503,10 +508,15 @@ async function setImage(dataUrl, keepStrokes) {
   ed.image = dataUrl;
   redrawOv();
   $('#noImg').hidden = true; $('#imgBox').hidden = false;
-  setPen(true);
+  setMode(lastMode());
 }
 function clearImage() { ed.image = null; ed.strokes = []; $('#noImg').hidden = false; $('#imgBox').hidden = true; }
 function drawStroke(ctx, s) {
+  if (s.r) {
+    ctx.fillStyle = '#ffd000'; ctx.fillRect(s.r[0], s.r[1], s.r[2], s.r[3]);
+    ctx.strokeStyle = '#e67e00'; ctx.lineWidth = Math.max(3, cvOv.width / 300); ctx.strokeRect(s.r[0], s.r[1], s.r[2], s.r[3]);
+    return;
+  }
   ctx.strokeStyle = '#ffd000'; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(s.pts[0][0], s.pts[0][1]);
   if (s.pts.length === 1) ctx.lineTo(s.pts[0][0] + 0.1, s.pts[0][1]);
@@ -514,13 +524,20 @@ function drawStroke(ctx, s) {
   ctx.stroke();
 }
 function redrawOv() { const c = cvOv.getContext('2d'); c.clearRect(0, 0, cvOv.width, cvOv.height); ed.strokes.forEach(s => drawStroke(c, s)); }
-function setPen(on) { ed.pen = on; cvOv.classList.toggle('off', !on); $('#tPen').classList.toggle('on', on); $('#tPen').textContent = on ? '✏️ 형광펜' : '✋ 이동'; }
+function setMode(m) {
+  ed.mode = m; try { if (m !== 'move') localStorage.setItem('selMode', m); } catch (_) {}
+  cvOv.classList.toggle('off', m === 'move');
+  $('#mRect').classList.toggle('on', m === 'rect'); $('#mPen').classList.toggle('on', m === 'pen'); $('#mMove').classList.toggle('on', m === 'move');
+  $('#penBox').hidden = m !== 'pen';
+}
+function lastMode() { try { return localStorage.getItem('selMode') || 'rect'; } catch (_) { return 'rect'; } }
 function ovPos(e) { const r = cvOv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * cvOv.width / r.width), Math.round((e.clientY - r.top) * cvOv.height / r.height)]; }
 let cur = null;
 cvOv.addEventListener('pointerdown', e => {
-  if (!ed.pen) return;
+  if (ed.mode === 'move') return;
   e.preventDefault();
   try { cvOv.setPointerCapture(e.pointerId); } catch (_) {}
+  if (ed.mode === 'rect') { const p = ovPos(e); cur = { r: [p[0], p[1], 0, 0], o: p }; ed.strokes.push(cur); return; }
   const r = cvOv.getBoundingClientRect();
   cur = { w: Math.round($('#penSize').value * cvOv.width / r.width), pts: [ovPos(e)] };
   ed.strokes.push(cur);
@@ -529,6 +546,11 @@ cvOv.addEventListener('pointerdown', e => {
 cvOv.addEventListener('pointermove', e => {
   if (!cur) return;
   e.preventDefault();
+  if (cur.r) {
+    const p = ovPos(e), o = cur.o;
+    cur.r = [Math.min(o[0], p[0]), Math.min(o[1], p[1]), Math.abs(p[0] - o[0]), Math.abs(p[1] - o[1])];
+    redrawOv(); return;
+  }
   const p = ovPos(e), last = cur.pts[cur.pts.length - 1];
   if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 2) return;
   cur.pts.push(p);
@@ -536,34 +558,95 @@ cvOv.addEventListener('pointermove', e => {
   c.strokeStyle = '#ffd000'; c.lineWidth = cur.w; c.lineCap = 'round';
   c.beginPath(); c.moveTo(last[0], last[1]); c.lineTo(p[0], p[1]); c.stroke();
 });
-['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cvOv.addEventListener(t, () => { cur = null; }));
-$('#tPen').onclick = () => setPen(!ed.pen);
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cvOv.addEventListener(t, () => {
+  if (cur && cur.r) {
+    delete cur.o;
+    const minSz = cvOv.width / 60;
+    if (cur.r[2] < minSz || cur.r[3] < minSz / 2) { ed.strokes.splice(ed.strokes.indexOf(cur), 1); redrawOv(); }
+  }
+  cur = null;
+}));
+$('#mRect').onclick = () => setMode('rect');
+$('#mPen').onclick = () => setMode('pen');
+$('#mMove').onclick = () => setMode('move');
 $('#tUndo').onclick = () => { ed.strokes.pop(); redrawOv(); };
 $('#tClear').onclick = () => { ed.strokes = []; redrawOv(); };
-$('#tZoom').onclick = () => { const z = $('#cinner').classList.toggle('zoom'); $('#tZoom').classList.toggle('on', z); if (z) toast('확대: [✋ 이동]으로 바꾸면 사진을 움직일 수 있습니다', 3000); };
+$('#tZoom').onclick = () => { const z = $('#cinner').classList.toggle('zoom'); $('#tZoom').classList.toggle('on', z); if (z) toast('확대: [✋ 이동]을 누르면 사진을 움직일 수 있습니다', 3000); };
 $('#tChange').onclick = () => { if (confirm('사진을 바꾸면 형광펜 표시가 지워집니다. 바꿀까요?')) clearImage(); };
 
-/* 형광펜 칠한 부분만 잘라낸 이미지 (나머지는 흰색) */
-function highlightCanvas() {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  ed.strokes.forEach(s => s.pts.forEach(([x, y]) => {
-    x0 = Math.min(x0, x - s.w / 2); y0 = Math.min(y0, y - s.w / 2);
-    x1 = Math.max(x1, x + s.w / 2); y1 = Math.max(y1, y + s.w / 2);
-  }));
-  x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
-  x1 = Math.min(cvBase.width, Math.ceil(x1)); y1 = Math.min(cvBase.height, Math.ceil(y1));
-  const bw = x1 - x0, bh = y1 - y0;
-  if (bw < 4 || bh < 4) return null;
-  const m = mk(bw, bh), mc = m.getContext('2d');
-  mc.drawImage(cvOv, -x0, -y0);                 // 형광펜 모양 = 마스크
-  mc.globalCompositeOperation = 'source-in';
-  mc.drawImage(cvBase, -x0, -y0);               // 마스크 안쪽 사진만 남김
-  const sc = (bw < 900 || bh < 300) ? 2 : 1;      // 작은 영역은 2배 키워 인식률 향상
-  const out = mk(bw * sc, bh * sc), oc = out.getContext('2d');
-  oc.fillStyle = '#fff'; oc.fillRect(0, 0, out.width, out.height);
-  oc.imageSmoothingQuality = 'high';
-  oc.drawImage(m, 0, 0, out.width, out.height);
-  return out;
+/* 선택 영역 → 사각형 목록 (형광펜은 칠한 줄을 감싸는 사각형으로 바꿔 글자가 잘리지 않게) */
+function selRegions() {
+  const W = cvBase.width, H = cvBase.height;
+  let rs = ed.strokes.map(s => {
+    if (s.r) return s.r.slice();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    s.pts.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
+    const padX = s.w * 0.6, padY = s.w * 0.75;
+    return [x0 - padX, y0 - padY, x1 - x0 + padX * 2, y1 - y0 + padY * 2];
+  }).map(([x, y, w, h]) => {
+    const x0 = Math.max(0, Math.floor(x)), y0 = Math.max(0, Math.floor(y));
+    const x1 = Math.min(W, Math.ceil(x + w)), y1 = Math.min(H, Math.ceil(y + h));
+    return [x0, y0, x1 - x0, y1 - y0];
+  }).filter(r => r[2] > 8 && r[3] > 8);
+  // 많이 겹치는 영역은 하나로 합침 (같은 줄을 두 번 칠한 경우 등)
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
+      const a = rs[i], b = rs[j];
+      const ix = Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]));
+      const iy = Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
+      if (ix * iy > 0.4 * Math.min(a[2] * a[3], b[2] * b[3])) {
+        const x0 = Math.min(a[0], b[0]), y0 = Math.min(a[1], b[1]);
+        rs[i] = [x0, y0, Math.max(a[0] + a[2], b[0] + b[2]) - x0, Math.max(a[1] + a[3], b[1] + b[3]) - y0];
+        rs.splice(j, 1); merged = true; break outer;
+      }
+    }
+  }
+  // 위→아래, 같은 높이면 왼→오 순서
+  rs.sort((a, b) => Math.abs((a[1] + a[3] / 2) - (b[1] + b[3] / 2)) < Math.min(a[3], b[3]) / 2 ? a[0] - b[0] : a[1] - b[1]);
+  return rs;
+}
+/* OCR 전처리: 확대 → 흑백 → 그림자 보정(적응형 이진화) → 흰 여백 */
+function prepRegion(x, y, w, h, binarize) {
+  const sc = Math.max(1, Math.min(3, 1800 / w, 4000 / h));
+  const W = Math.round(w * sc), H = Math.round(h * sc), pad = 24;
+  const c = mk(W + pad * 2, H + pad * 2), cx = c.getContext('2d', { willReadFrequently: true });
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+  cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+  cx.drawImage(cvBase, x, y, w, h, pad, pad, W, H);
+  if (binarize === false) return c;
+  const id = cx.getImageData(0, 0, c.width, c.height), d = id.data, CW = c.width, CH = c.height;
+  const g = new Float32Array(CW * CH);
+  for (let i = 0, j = 0; i < g.length; i++, j += 4) g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+  // 적적분 영상으로 주변 평균 밝기 계산 (Bradley 방식)
+  const S = new Float64Array((CW + 1) * (CH + 1));
+  for (let yy = 0; yy < CH; yy++) {
+    let row = 0;
+    for (let xx = 0; xx < CW; xx++) { row += g[yy * CW + xx]; S[(yy + 1) * (CW + 1) + xx + 1] = S[yy * (CW + 1) + xx + 1] + row; }
+  }
+  const half = Math.max(12, Math.min(90, Math.round(Math.max(CW, CH) / 24)));
+  for (let yy = 0; yy < CH; yy++) {
+    const ya = Math.max(0, yy - half), yb = Math.min(CH, yy + half + 1);
+    for (let xx = 0; xx < CW; xx++) {
+      const xa = Math.max(0, xx - half), xb = Math.min(CW, xx + half + 1);
+      const sum = S[yb * (CW + 1) + xb] - S[ya * (CW + 1) + xb] - S[yb * (CW + 1) + xa] + S[ya * (CW + 1) + xa];
+      const mean = sum / ((xb - xa) * (yb - ya));
+      const v = g[yy * CW + xx] < mean * 0.85 ? 0 : 255, k = (yy * CW + xx) * 4;
+      d[k] = d[k + 1] = d[k + 2] = v; d[k + 3] = 255;
+    }
+  }
+  cx.putImageData(id, 0, 0);
+  return c;
+}
+/* 한글 글자 사이에 잘못 들어간 띄어쓰기 정리 (한 글자씩 끊긴 경우만) */
+function fixKoSpacing(t) {
+  return t.split('\n').map(line => {
+    const tok = line.split(' ').filter(Boolean);
+    const single = tok.filter(w => /^[가-힣]$/.test(w)).length;
+    if (tok.length >= 6 && single / tok.length > 0.6) return line.replace(/([가-힣]) (?=[가-힣])/g, '$1');
+    return line;
+  }).join('\n');
 }
 function composite(maxW) {
   const s = Math.min(1, maxW / cvBase.width);
@@ -575,7 +658,7 @@ function composite(maxW) {
 }
 
 /* ---------- OCR (Tesseract.js, 한글+영어, 기기 안에서 처리) ---------- */
-let worker = null, ocrBusy = false;
+let worker = null, ocrBusy = false, ocrPrefix = '';
 function ocrMsg(t) { $('#ocrMsg').textContent = t; }
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('OCR 엔진을 불러오지 못했습니다')); document.head.appendChild(s); }); }
 async function getWorker() {
@@ -583,7 +666,7 @@ async function getWorker() {
   ocrMsg('OCR 엔진 준비 중… (처음 한 번은 한글 데이터를 내려받느라 30초~1분 걸릴 수 있습니다)');
   if (!window.Tesseract) await loadScript(TESS_URL);
   worker = await Tesseract.createWorker(['kor', 'eng'], 1, {
-    logger: m => { if (m.status === 'recognizing text') ocrMsg('글자 인식 중… ' + Math.round(m.progress * 100) + '%'); }
+    logger: m => { if (m.status === 'recognizing text') ocrMsg(ocrPrefix + '글자 인식 중… ' + Math.round(m.progress * 100) + '%'); }
   });
   await worker.setParameters({ preserve_interword_spaces: '1' });
   return worker;
@@ -596,21 +679,35 @@ function cleanText(t) {
 async function runOcr(mode) {
   if (ocrBusy) return;
   if (!ed.image) { toast('먼저 사진을 넣어 주세요'); return; }
-  let src;
+  let regions;
   if (mode === 'hl') {
-    if (!ed.strokes.length) { toast('형광펜으로 인식할 줄을 먼저 칠해 주세요'); return; }
-    src = highlightCanvas();
-    if (!src) { toast('칠한 영역이 너무 작습니다'); return; }
-  } else src = cvBase;
+    regions = selRegions();
+    if (!regions.length) { toast('▭ 사각형이나 ✏️ 형광펜으로 인식할 부분을 먼저 선택해 주세요'); return; }
+  } else regions = [[0, 0, cvBase.width, cvBase.height]];
   ocrBusy = true; $('#ocrHl').disabled = $('#ocrAll').disabled = true;
   try {
     const w = await getWorker();
-    ocrMsg('글자 인식 중…');
-    const { data } = await w.recognize(src);
-    const t = cleanText(data.text);
+    const parts = [];
+    for (let i = 0; i < regions.length; i++) {
+      const [x, y, rw, rh] = regions[i];
+      ocrPrefix = regions.length > 1 ? `(${i + 1}/${regions.length}) ` : '';
+      ocrMsg(ocrPrefix + '글자 인식 중…');
+      await w.setParameters({ tessedit_pageseg_mode: mode === 'hl' ? '6' : '3' });
+      // 1차: 원본 흑백 그대로 → 확신도가 낮으면 2차: 그림자 보정(이진화) 후 다시, 더 나은 쪽 사용
+      let { data } = await w.recognize(prepRegion(x, y, rw, rh, false));
+      if ((data.confidence || 0) < 85) {
+        ocrMsg(ocrPrefix + '보정해서 한 번 더 인식 중…');
+        const r2 = (await w.recognize(prepRegion(x, y, rw, rh, true))).data;
+        if ((r2.confidence || 0) > (data.confidence || 0)) data = r2;
+      }
+      const t = cleanText(fixKoSpacing(data.text));
+      if (t) parts.push(t);
+    }
+    ocrPrefix = '';
+    const t = parts.join('\n');
     if (!t) { ocrMsg('글자를 찾지 못했습니다. 더 밝고 반듯하게 찍어 다시 해 보세요.'); return; }
     const ta = $('#fText');
-    ta.value = (ta.value.trim() ? ta.value.trim() + '\n\n' : '') + t;
+    ta.value = (ta.value.trim() ? ta.value.trim() + '\n\n' : '') + cleanText(t);
     ocrMsg('✅ 변환 완료 — 틀린 글자는 아래 칸에서 바로 고치세요.');
     if (window.innerWidth < 900) ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } catch (e) {
@@ -619,7 +716,7 @@ async function runOcr(mode) {
     if (/SecurityError|Worker|claudeusercontent/i.test(m) || /claudeusercontent|claude\.ai/.test(location.hostname))
       ocrMsg('⚠️ 지금 열린 곳(Claude 미리보기 창)에서는 글자 변환이 막혀 있습니다. 앱 전용 주소(GitHub Pages)에서 열어 주세요.');
     else ocrMsg('⚠️ 변환 실패: ' + m + ' — 인터넷 연결을 확인하세요(첫 사용 시 필요).');
-  } finally { ocrBusy = false; $('#ocrHl').disabled = $('#ocrAll').disabled = false; }
+  } finally { ocrBusy = false; ocrPrefix = ''; $('#ocrHl').disabled = $('#ocrAll').disabled = false; }
 }
 $('#ocrHl').onclick = () => runOcr('hl');
 $('#ocrAll').onclick = () => runOcr('all');
