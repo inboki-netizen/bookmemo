@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f5d50">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="독서메모">
+<title>독서 사진 메모</title>
+<style>
+:root{--g:#2f5d50;--g2:#e8f0ec;--line:#e2e2e2;--txt:#222;--sub:#777;--y:#fff3b0;--r:12px}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;color:var(--txt);background:#f6f6f3;-webkit-tap-highlight-color:transparent}
+a{color:inherit;text-decoration:none}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;color:var(--txt)}
+button:disabled{opacity:.5}
+button.primary{background:var(--g);border-color:var(--g);color:#fff;font-weight:600}
+button.danger{color:#c0392b;border-color:#f0c4be}
+button.sm{padding:6px 12px;font-size:14px}
+button.ghost{background:transparent;border:none;color:#fff;padding:8px 10px}
+input,textarea,select{font:inherit;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--txt)}
+textarea{resize:vertical;line-height:1.6}
+label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+.top{position:sticky;top:0;z-index:20;background:var(--g);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top))}
+.logo{font-weight:700;font-size:18px}
+main{max-width:1000px;margin:0 auto;padding:14px 14px 100px}
+.searchbar input{font-size:16px;padding:12px 14px;border-radius:24px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:10px 0 4px}
+.chip{border-radius:20px;padding:6px 12px;font-size:14px;white-space:nowrap}
+.chip.on{background:var(--g);color:#fff;border-color:var(--g)}
+.hint{font-size:13px;color:#8a6d00;background:#fff8dc;border-radius:8px;padding:8px 10px;margin:8px 0}
+.hint:empty{display:none}
+.sec{font-weight:700;margin:18px 0 6px;color:var(--g)}
+.booklist{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+@media(min-width:760px){.booklist{grid-template-columns:1fr 1fr}}
+.bookrow{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:10px;margin-bottom:0}
+.sec+ .bookrow,.bookrow+.bookrow{margin-top:8px}
+.cover{width:54px;height:78px;object-fit:cover;border-radius:4px;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.2);background:#ddd}
+.cover.lg{width:96px;height:138px}
+.nocover{display:flex;align-items:center;justify-content:center;background:var(--g2);color:var(--g);font-weight:700;font-size:15px;text-align:center}
+.bi{flex:1;min-width:0}
+.bt{font-weight:700;font-size:16px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.ba{font-size:13px;color:var(--sub);margin-top:2px}
+.tag{display:inline-block;font-size:12px;background:var(--g2);color:var(--g);border-radius:10px;padding:2px 8px;margin-top:5px}
+.cnt{flex:none;text-align:center;min-width:52px;background:var(--g2);border-radius:10px;padding:6px 4px}
+.cnt b{display:block;font-size:20px;color:var(--g);line-height:1.1}
+.cnt small{font-size:11px;color:var(--g)}
+.ract{display:flex;gap:4px;flex:none}
+.rmemo{display:flex;flex-direction:column;align-items:center;padding:6px 8px;font-size:18px;line-height:1.1;border-radius:10px;background:var(--g);border-color:var(--g);color:#fff}
+.rmemo small{font-size:11px;color:#fff}
+.addmemo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.addmemo button{padding:16px 8px;font-size:16px;font-weight:700}
+.redit{flex:none;display:flex;flex-direction:column;align-items:center;padding:6px 8px;font-size:18px;line-height:1.1;border-radius:10px}
+.redit small{font-size:11px;color:var(--sub)}
+.empty{color:var(--sub);text-align:center;padding:14px}
+.empty.big{padding:60px 10px;line-height:1.8}
+.fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;background:var(--g);color:#fff;border:none;border-radius:28px;padding:14px 20px;font-weight:700;font-size:16px;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.back{display:inline-block;color:var(--g);font-weight:600;padding:4px 0 10px}
+.bhead{display:flex;gap:16px;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.bhead h2{margin:0;font-size:20px;line-height:1.3}
+.bcount{margin:8px 0;font-size:15px}
+.bcount b{color:var(--g);font-size:18px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.memorow{display:flex;gap:12px;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:10px;margin-top:10px}
+.mthumb{width:86px;height:86px;object-fit:cover;border-radius:8px;flex:none;background:#eee}
+.nothumb{display:flex;align-items:center;justify-content:center;font-size:28px}
+.mi{flex:1;min-width:0}
+.mbook{font-size:12px;color:var(--g);font-weight:700}
+.mtext{font-size:15px;line-height:1.55;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;white-space:pre-line}
+.mdate{font-size:12px;color:var(--sub);margin-top:4px}
+mark{background:#ffe066;padding:0 1px;border-radius:2px}
+.edhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.edhead button{color:var(--g);border:none;background:none;font-weight:600;padding:4px 0}
+.edhead b{font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edgrid{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:900px){.edgrid{grid-template-columns:1.25fr 1fr}}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.noimg{text-align:center;padding:40px 10px;color:var(--sub)}
+.noimg .row{justify-content:center;margin-top:12px}
+.noimg button{min-width:120px;padding:14px}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.tools button{padding:8px 10px;font-size:14px}
+.tools .on{background:#fff3b0;border-color:#e6c200;font-weight:700}
+.pen{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub)}
+.pen input{width:90px;padding:0}
+.cwrap{overflow:auto;max-height:72vh;border-radius:8px;background:#222;-webkit-overflow-scrolling:touch}
+.cinner{position:relative;width:100%}
+.cinner.zoom{width:230%}
+.cinner canvas{display:block;width:100%;height:auto}
+#cvOv{position:absolute;left:0;top:0;opacity:.45;mix-blend-mode:multiply;touch-action:none}
+#cvOv.off{pointer-events:none}
+.ocrbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.ocrbtns button{padding:12px 8px}
+.ocrmsg{font-size:13px;color:var(--g);min-height:18px;margin-top:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.savebar{display:flex;gap:8px;margin-top:14px}
+.savebar .primary{flex:1;padding:14px}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:700px){.modal{align-items:center}}
+.sheet{background:#fff;width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:700px){.sheet{border-radius:16px}}
+.sheet h3{margin:0 0 6px}
+.coverpick{display:flex;gap:12px;align-items:center}
+.help{font-size:13.5px;color:#555;line-height:1.7;background:#f7f7f4;border-radius:10px;padding:10px 12px;margin:10px 0}
+.help ol{margin:4px 0;padding-left:20px}
+.bigbtn{width:100%;padding:14px;margin-top:8px;font-size:16px}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:99;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header class="top">
+  <a href="#" class="logo">📚 독서메모</a>
+  <button id="btnBackup" class="ghost">☁️ 백업</button>
+</header>
+
+<main>
+  <!-- 홈: 책 목록 -->
+  <section id="vHome" class="view">
+    <div class="searchbar"><input id="q" type="search" placeholder="🔍 책 제목 · 저자 · 메모 문구 검색"></div>
+    <div id="cats" class="chips"></div>
+    <div id="backupHint" class="hint"></div>
+    <div id="homeList"></div>
+    <button id="fabBook" class="fab">＋ 책 추가</button>
+  </section>
+
+  <!-- 책 상세: 메모 목록 -->
+  <section id="vBook" class="view" hidden>
+    <div id="bookHead"></div>
+    <div id="memoList"></div>
+    <button id="fabMemo" class="fab">＋ 메모 추가</button>
+  </section>
+
+  <!-- 메모 작성/수정 -->
+  <section id="vEdit" class="view" hidden>
+    <div class="edhead"><button id="edBack">← 뒤로</button><b id="edTitle"></b></div>
+    <div class="edgrid">
+      <div class="card">
+        <div id="noImg" class="noimg">
+          <div>책 페이지 사진을 찍거나 불러오세요<br><small>(사진 없이 글만 적어도 됩니다)</small></div>
+          <div class="row">
+            <button class="primary" data-pick="cam" data-target="memo">📷 촬영</button>
+            <button data-pick="album" data-target="memo">🖼 앨범</button>
+          </div>
+        </div>
+        <div id="imgBox" hidden>
+          <div class="tools">
+            <button id="tPen" class="on">✏️ 형광펜</button>
+            <span class="pen">굵기 <input id="penSize" type="range" min="8" max="60" value="22"></span>
+            <button id="tUndo">↶ 되돌리기</button>
+            <button id="tClear">지우기</button>
+            <button id="tZoom">🔍 확대</button>
+            <button id="tChange">📷 사진 바꾸기</button>
+          </div>
+          <div class="cwrap" id="cwrap"><div class="cinner" id="cinner"><canvas id="cvBase"></canvas><canvas id="cvOv"></canvas></div></div>
+          <div class="ocrbtns">
+            <button id="ocrHl" class="primary">형광펜 부분만 글자로</button>
+            <button id="ocrAll">사진 전체 글자로</button>
+          </div>
+          <div id="ocrMsg" class="ocrmsg">형광펜으로 원하는 줄을 칠한 뒤 [형광펜 부분만 글자로]를 누르세요.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="two">
+          <div><label>찍은 날짜</label><input id="fDate" type="date"></div>
+          <div><label>페이지</label><input id="fPage" inputmode="numeric" placeholder="예: 125"></div>
+        </div>
+        <label>구절 (사진에서 변환된 텍스트 · 직접 수정 가능)</label>
+        <textarea id="fText" rows="8" placeholder="OCR 결과가 여기에 들어옵니다. 직접 입력해도 됩니다."></textarea>
+        <label>내 생각 (선택)</label>
+        <textarea id="fNote" rows="3" placeholder="이 구절에 대한 생각"></textarea>
+        <div class="savebar">
+          <button id="mDel" class="danger">삭제</button>
+          <button id="mSave" class="primary">💾 저장</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 책 추가/수정 -->
+<div id="mBook" class="modal" hidden>
+  <div class="sheet">
+    <h3 id="mBookTitle">책 추가</h3>
+    <div class="coverpick">
+      <div id="coverPrev"></div>
+      <div class="row" style="flex-direction:column;align-items:stretch">
+        <button data-pick="cam" data-target="cover">📷 표지 촬영</button>
+        <button data-pick="album" data-target="cover">🖼 표지 불러오기</button>
+        <button id="coverDel" class="sm danger" hidden>표지 삭제</button>
+      </div>
+    </div>
+    <label>책 제목 *</label><input id="bTitle" placeholder="책 제목">
+    <label>저자</label><input id="bAuthor" placeholder="저자 (선택)">
+    <label>도서 분류</label><input id="bCat" list="catList" placeholder="예: 주식, 소설, 시, 에세이">
+    <datalist id="catList"></datalist>
+    <div class="savebar">
+      <button id="bCancel">취소</button>
+      <button id="bSave" class="primary">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 백업 -->
+<div id="mBackup" class="modal" hidden>
+  <div class="sheet">
+    <h3>☁️ 구글드라이브 백업</h3>
+    <div id="bkStat" class="help"></div>
+    <button id="bkExport" class="primary bigbtn">① 백업 파일 만들기 → 드라이브로 보내기</button>
+    <div class="help">
+      <b>핸드폰</b>: 버튼을 누르면 공유 창이 뜹니다 → <b>Drive</b> 선택 → 저장.<br>
+      <b>PC</b>: 파일이 다운로드됩니다 → drive.google.com에 끌어다 놓으세요.<br>
+      백업 파일(.html)은 PC 브라우저로 열면 책·사진·구절을 그대로 볼 수 있습니다.
+    </div>
+    <button id="bkImport" class="bigbtn">② 백업 불러오기 (PC · 새 핸드폰)</button>
+    <div class="help">드라이브에서 받은 백업 파일을 선택하면 이 기기의 메모와 <b>합쳐집니다</b>(같은 메모는 최신 것으로 유지).</div>
+    <button id="bkClose" class="bigbtn">닫기</button>
+  </div>
+</div>
+
+<input type="file" id="fCam" accept="image/*" capture="environment" hidden>
+<input type="file" id="fAlbum" accept="image/*" hidden>
+<input type="file" id="fImport" accept=".html,.htm,.json,.txt,text/html,application/json,text/plain" hidden>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const TESS_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+const DEFAULT_CATS = ['주식','경제·경영','자기계발','소설','시','에세이','인문','역사','과학','기타'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+let toastT;
+function toast(msg, ms = 2200) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms); }
+
+/* ---------- 저장소 (핸드폰 안: IndexedDB) ---------- */
+let dbp;
+function db() {
+  if (!dbp) dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('bookmemo', 1);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      if (!d.objectStoreNames.contains('books')) d.createObjectStore('books', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('memos')) d.createObjectStore('memos', { keyPath: 'id' });
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  return dbp;
+}
+async function tx(store, mode, fn) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const t = d.transaction(store, mode);
+    let out;
+    const r = fn(t.objectStore(store));
+    if (r) r.onsuccess = () => { out = r.result; };
+    t.oncomplete = () => res(out);
+    t.onerror = () => rej(t.error);
+    t.onabort = () => rej(t.error || new Error('저장 실패'));
+  });
+}
+const getAll = s => tx(s, 'readonly', st => st.getAll());
+const get = (s, k) => tx(s, 'readonly', st => st.get(k));
+const put = (s, v) => tx(s, 'readwrite', st => st.put(v));
+const del = (s, k) => tx(s, 'readwrite', st => st.delete(k));
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+/* ---------- 이미지 ---------- */
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('이미지 로드 실패')); i.src = src; }); }
+function mk(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
+function readAsDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(file); }); }
+/* 사진 해독: 3가지 방법을 차례로 시도 (기기·브라우저마다 막히는 방식이 달라서) */
+async function decodeFile(file) {
+  if (window.createImageBitmap) { try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (_) {} }
+  try { return await loadImg(await readAsDataURL(file)); } catch (_) {}
+  const url = URL.createObjectURL(file);
+  try { return await loadImg(url); } catch (_) {} finally { setTimeout(() => URL.revokeObjectURL(url), 3000); }
+  const heic = /hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name || '');
+  throw new Error(heic
+    ? 'HEIC 형식 사진은 이 브라우저가 열지 못합니다. 카메라 설정에서 "고효율 사진"을 끄거나 [📷 촬영]으로 바로 찍어 주세요.'
+    : '이 사진 형식을 열 수 없습니다 (' + (file.type || '형식 알 수 없음') + ')');
+}
+async function fileToDataURL(file, max, q) {
+  const img = await decodeFile(file);
+  const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+  const s = Math.min(1, max / Math.max(w0, h0));
+  const c = mk(w0 * s, h0 * s);
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(img, 0, 0, c.width, c.height);
+  if (img.close) img.close();
+  return c.toDataURL('image/jpeg', q);
+}
+
+/* ---------- 라우팅 ---------- */
+function show(id) { document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== id); }
+window.addEventListener('hashchange', route);
+async function route() {
+  const h = location.hash.slice(1).split('/');
+  try {
+    if (h[0] === 'book' && h[1]) await renderBook(h[1]);
+    else if (h[0] === 'memo' && h[1]) await openEditor(h[1], h[2]);
+    else await renderHome();
+  } catch (e) { console.error(e); toast('오류: ' + (e.message || e)); }
+  window.scrollTo(0, 0);
+}
+
+/* ---------- 홈 ---------- */
+let catFilter = '';
+function hl(text, q) {
+  const t = esc(text);
+  if (!q) return t;
+  const qe = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return t.replace(new RegExp(qe, 'gi'), m => '<mark>' + m + '</mark>');
+}
+function snip(text, q) {
+  text = String(text || '');
+  if (!q) return text;
+  const i = text.toLowerCase().indexOf(q);
+  if (i < 0 || text.length < 120) return text;
+  const st = Math.max(0, i - 40);
+  return (st > 0 ? '…' : '') + text.slice(st, st + 140) + '…';
+}
+function coverHtml(b, cls = 'cover') {
+  return b.cover ? `<img class="${cls}" src="${b.cover}" alt="">` : `<div class="${cls} nocover">${esc((b.title || '?').slice(0, 4))}</div>`;
+}
+function bookRow(b, n, q) {
+  return `<a class="bookrow" href="#book/${b.id}">${coverHtml(b)}
+    <div class="bi"><div class="bt">${hl(b.title, q)}</div>
+    ${b.author ? `<div class="ba">${hl(b.author, q)}</div>` : ''}
+    ${b.category ? `<span class="tag">${esc(b.category)}</span>` : ''}</div>
+    <div class="cnt"><b>${n}</b><small>메모</small></div>
+    <div class="ract"><button class="rmemo" data-pick="album" data-target="newmemo" data-book="${b.id}">📷<small>메모</small></button>
+    <button class="redit" data-edit="${b.id}" title="책 정보 수정">✏️<small>수정</small></button></div></a>`;
+}
+function memoRow(m, b, q) {
+  return `<a class="memorow" href="#memo/${m.id}">
+    ${m.thumb ? `<img class="mthumb" src="${m.thumb}" alt="">` : '<div class="mthumb nothumb">📝</div>'}
+    <div class="mi">${b ? `<div class="mbook">📖 ${esc(b.title)}</div>` : ''}
+    <div class="mtext">${hl(snip(m.text || m.note || '(텍스트 없음)', q), q)}</div>
+    <div class="mdate">${esc(m.date || '')}${m.page ? ' · p.' + esc(m.page) : ''}${m.note && m.text ? ' · 💭' : ''}</div></div></a>`;
+}
+async function renderHome() {
+  show('vHome');
+  const [books, memos] = await Promise.all([getAll('books'), getAll('memos')]);
+  const cnt = {}; memos.forEach(m => cnt[m.bookId] = (cnt[m.bookId] || 0) + 1);
+  const byId = Object.fromEntries(books.map(b => [b.id, b]));
+  books.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  const cats = [...new Set(books.map(b => b.category).filter(Boolean))];
+  if (catFilter && !cats.includes(catFilter)) catFilter = '';
+  $('#cats').innerHTML = cats.length ? ['', ...cats].map(c => `<button class="chip ${c === catFilter ? 'on' : ''}" data-cat="${esc(c)}">${c ? esc(c) : '전체'}</button>`).join('') : '';
+
+  const last = +localStorage.getItem('lastBackup') || 0;
+  const days = last ? Math.floor((Date.now() - last) / 86400000) : null;
+  $('#backupHint').innerHTML = memos.length && (days === null || days >= 7)
+    ? `☁️ ${days === null ? '아직 구글드라이브 백업을 한 적이 없습니다.' : '마지막 백업 ' + days + '일 전.'} 오른쪽 위 <b>백업</b>을 눌러 주세요.` : '';
+
+  const q = $('#q').value.trim().toLowerCase();
+  let html = '';
+  if (q) {
+    const bs = books.filter(b => [b.title, b.author, b.category].join(' ').toLowerCase().includes(q));
+    const ms = memos.filter(m => [m.text, m.note, m.page].join(' ').toLowerCase().includes(q))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    html += `<div class="sec">📖 책 ${bs.length}권</div>` + (bs.map(b => bookRow(b, cnt[b.id] || 0, q)).join('') || '<p class="empty">일치하는 책이 없습니다</p>');
+    html += `<div class="sec">📝 메모 ${ms.length}개</div>` + (ms.map(m => memoRow(m, byId[m.bookId], q)).join('') || '<p class="empty">일치하는 메모가 없습니다</p>');
+  } else {
+    const list = catFilter ? books.filter(b => b.category === catFilter) : books;
+    html = list.length
+      ? `<div class="booklist">${list.map(b => bookRow(b, cnt[b.id] || 0)).join('')}</div>`
+      : `<div class="empty big">아직 등록된 책이 없습니다.<br>아래 <b>＋ 책 추가</b>를 눌러 시작하세요.</div>`;
+  }
+  $('#homeList').innerHTML = html;
+}
+let qT;
+$('#q').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(renderHome, 200); });
+$('#homeList').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-edit]'); if (!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  const b = await get('books', btn.dataset.edit);
+  if (b) openBookForm(b); else toast('책을 찾을 수 없습니다');
+});
+$('#cats').addEventListener('click', e => { const c = e.target.closest('[data-cat]'); if (!c) return; catFilter = c.dataset.cat; renderHome(); });
+
+/* ---------- 책 상세 ---------- */
+let curBook = null;
+async function renderBook(id) {
+  const b = await get('books', id);
+  if (!b) { location.hash = ''; return; }
+  show('vBook'); curBook = b;
+  const memos = (await getAll('memos')).filter(m => m.bookId === id)
+    .sort((x, y) => (y.date || '').localeCompare(x.date || '') || (y.createdAt || 0) - (x.createdAt || 0));
+  $('#bookHead').innerHTML = `<a href="#" class="back">← 책 목록</a>
+    <div class="bhead">${coverHtml(b, 'cover lg')}
+      <div style="flex:1;min-width:0"><h2>${esc(b.title)}</h2>
+      ${b.author ? `<div class="ba">${esc(b.author)}</div>` : ''}
+      ${b.category ? `<span class="tag">${esc(b.category)}</span>` : ''}
+      <div class="bcount">독서메모 <b>${memos.length}</b>개</div>
+      <div class="row"><button class="sm" id="bEdit">✏️ 책 정보 수정</button><button class="sm danger" id="bDel">삭제</button></div></div>
+    </div>
+    <div class="addmemo">
+      <button class="primary" data-pick="cam" data-target="newmemo" data-book="${b.id}">📷 사진 찍어 메모</button>
+      <button class="primary" data-pick="album" data-target="newmemo" data-book="${b.id}">🖼 앨범에서 메모</button>
+    </div>`;
+  $('#memoList').innerHTML = memos.length ? memos.map(m => memoRow(m, null, '')).join('')
+    : '<div class="empty big">아직 메모가 없습니다.<br>위의 <b>📷 사진 찍어 메모</b>를 눌러 구절을 찍어 보세요.</div>';
+  $('#bEdit').onclick = () => openBookForm(b);
+  $('#bDel').onclick = async () => {
+    if (!confirm(`「${b.title}」과 메모 ${memos.length}개를 모두 삭제할까요?`)) return;
+    for (const m of memos) await del('memos', m.id);
+    await del('books', b.id);
+    toast('삭제했습니다'); location.hash = '';
+  };
+}
+$('#fabMemo').onclick = () => { if (curBook) location.hash = '#memo/new/' + curBook.id; };
+
+/* ---------- 책 추가/수정 ---------- */
+let bookForm = null;
+async function openBookForm(b) {
+  bookForm = b ? { ...b } : { id: null, cover: null };
+  $('#mBookTitle').textContent = b ? '책 정보 수정' : '책 추가';
+  $('#bTitle').value = b?.title || ''; $('#bAuthor').value = b?.author || ''; $('#bCat').value = b?.category || '';
+  const used = (await getAll('books')).map(x => x.category).filter(Boolean);
+  $('#catList').innerHTML = [...new Set([...used, ...DEFAULT_CATS])].map(c => `<option value="${esc(c)}">`).join('');
+  updateCoverPreview();
+  $('#mBook').hidden = false;
+  if (!b) setTimeout(() => $('#bTitle').focus(), 50);
+}
+function updateCoverPreview() {
+  $('#coverPrev').innerHTML = coverHtml({ cover: bookForm.cover, title: $('#bTitle').value || '표지' }, 'cover lg');
+  $('#coverDel').hidden = !bookForm.cover;
+}
+$('#fabBook').onclick = () => openBookForm(null);
+$('#bCancel').onclick = () => { $('#mBook').hidden = true; };
+$('#coverDel').onclick = () => { bookForm.cover = null; updateCoverPreview(); };
+$('#bTitle').addEventListener('input', () => { if (!bookForm.cover) updateCoverPreview(); });
+$('#bSave').onclick = async () => {
+  const title = $('#bTitle').value.trim();
+  if (!title) { toast('책 제목을 입력해 주세요'); return; }
+  const now = Date.now(), isNew = !bookForm.id;
+  const b = { ...bookForm, id: bookForm.id || uid(), title, author: $('#bAuthor').value.trim(), category: $('#bCat').value.trim(),
+    createdAt: bookForm.createdAt || now, updatedAt: now };
+  try { await put('books', b); } catch (e) { console.warn(e); toast('저장 실패: ' + (e.message || e) + ' — 사진이 너무 크거나 저장공간이 부족할 수 있습니다', 6000); return; }
+  $('#mBook').hidden = true; toast('저장했습니다');
+  if (isNew) location.hash = '#book/' + b.id; else route();
+};
+
+/* ---------- 사진 선택 (촬영/앨범) ---------- */
+let pickFor = null, pickBook = null, pendingImage = null;
+document.addEventListener('click', e => {
+  const p = e.target.closest('[data-pick]'); if (!p) return;
+  e.preventDefault(); e.stopPropagation();
+  pickFor = p.dataset.target; pickBook = p.dataset.book || null;
+  const inp = p.dataset.pick === 'cam' ? $('#fCam') : $('#fAlbum');
+  inp.value = ''; inp.click();
+});
+async function onPicked(e) {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try {
+    if (pickFor === 'cover') { bookForm.cover = await fileToDataURL(f, 600, 0.85); updateCoverPreview(); }
+    else if (pickFor === 'newmemo') {
+      toast('사진 불러오는 중…');
+      pendingImage = await fileToDataURL(f, 2000, 0.88);
+      const target = '#memo/new/' + pickBook;
+      if (location.hash === target) route(); else location.hash = target;
+    }
+    else { toast('사진 불러오는 중…'); await setImage(await fileToDataURL(f, 2000, 0.88), false); }
+  } catch (err) { console.warn(err); toast('사진을 읽지 못했습니다: ' + (err.message || err), 6000); }
+}
+$('#fCam').addEventListener('change', onPicked);
+$('#fAlbum').addEventListener('change', onPicked);
+
+/* ---------- 메모 편집 + 형광펜 ---------- */
+const cvBase = $('#cvBase'), cvOv = $('#cvOv');
+const ed = { memo: null, bookId: null, strokes: [], image: null, pen: true };
+async function openEditor(a, b) {
+  let memo = null, bookId = b;
+  if (a !== 'new') { memo = await get('memos', a); if (!memo) { location.hash = ''; return; } bookId = memo.bookId; }
+  const book = await get('books', bookId);
+  if (!book) { location.hash = ''; return; }
+  show('vEdit');
+  ed.memo = memo; ed.bookId = bookId;
+  $('#edTitle').textContent = '📖 ' + book.title + (memo ? '' : ' · 새 메모');
+  $('#fDate').value = memo?.date || today(); $('#fPage').value = memo?.page || '';
+  $('#fText').value = memo?.text || ''; $('#fNote').value = memo?.note || '';
+  $('#mDel').hidden = !memo;
+  $('#cinner').classList.remove('zoom'); $('#tZoom').classList.remove('on');
+  if (memo?.image) { ed.strokes = JSON.parse(JSON.stringify(memo.strokes || [])); await setImage(memo.image, true); }
+  else if (!memo && pendingImage) { const d = pendingImage; pendingImage = null; await setImage(d, false); }
+  else clearImage();
+  ocrMsg('형광펜으로 원하는 줄을 칠한 뒤 [형광펜 부분만 글자로]를 누르세요.');
+}
+$('#edBack').onclick = () => { location.hash = '#book/' + ed.bookId; };
+async function setImage(dataUrl, keepStrokes) {
+  const img = await loadImg(dataUrl);
+  cvBase.width = cvOv.width = img.naturalWidth;
+  cvBase.height = cvOv.height = img.naturalHeight;
+  cvBase.getContext('2d').drawImage(img, 0, 0);
+  if (!keepStrokes) ed.strokes = [];
+  ed.image = dataUrl;
+  redrawOv();
+  $('#noImg').hidden = true; $('#imgBox').hidden = false;
+  setPen(true);
+}
+function clearImage() { ed.image = null; ed.strokes = []; $('#noImg').hidden = false; $('#imgBox').hidden = true; }
+function drawStroke(ctx, s) {
+  ctx.strokeStyle = '#ffd000'; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(s.pts[0][0], s.pts[0][1]);
+  if (s.pts.length === 1) ctx.lineTo(s.pts[0][0] + 0.1, s.pts[0][1]);
+  for (let i = 1; i < s.pts.length; i++) ctx.lineTo(s.pts[i][0], s.pts[i][1]);
+  ctx.stroke();
+}
+function redrawOv() { const c = cvOv.getContext('2d'); c.clearRect(0, 0, cvOv.width, cvOv.height); ed.strokes.forEach(s => drawStroke(c, s)); }
+function setPen(on) { ed.pen = on; cvOv.classList.toggle('off', !on); $('#tPen').classList.toggle('on', on); $('#tPen').textContent = on ? '✏️ 형광펜' : '✋ 이동'; }
+function ovPos(e) { const r = cvOv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * cvOv.width / r.width), Math.round((e.clientY - r.top) * cvOv.height / r.height)]; }
+let cur = null;
+cvOv.addEventListener('pointerdown', e => {
+  if (!ed.pen) return;
+  e.preventDefault();
+  try { cvOv.setPointerCapture(e.pointerId); } catch (_) {}
+  const r = cvOv.getBoundingClientRect();
+  cur = { w: Math.round($('#penSize').value * cvOv.width / r.width), pts: [ovPos(e)] };
+  ed.strokes.push(cur);
+  drawStroke(cvOv.getContext('2d'), cur);
+});
+cvOv.addEventListener('pointermove', e => {
+  if (!cur) return;
+  e.preventDefault();
+  const p = ovPos(e), last = cur.pts[cur.pts.length - 1];
+  if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 2) return;
+  cur.pts.push(p);
+  const c = cvOv.getContext('2d');
+  c.strokeStyle = '#ffd000'; c.lineWidth = cur.w; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(last[0], last[1]); c.lineTo(p[0], p[1]); c.stroke();
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => cvOv.addEventListener(t, () => { cur = null; }));
+$('#tPen').onclick = () => setPen(!ed.pen);
+$('#tUndo').onclick = () => { ed.strokes.pop(); redrawOv(); };
+$('#tClear').onclick = () => { ed.strokes = []; redrawOv(); };
+$('#tZoom').onclick = () => { const z = $('#cinner').classList.toggle('zoom'); $('#tZoom').classList.toggle('on', z); if (z) toast('확대: [✋ 이동]으로 바꾸면 사진을 움직일 수 있습니다', 3000); };
+$('#tChange').onclick = () => { if (confirm('사진을 바꾸면 형광펜 표시가 지워집니다. 바꿀까요?')) clearImage(); };
+
+/* 형광펜 칠한 부분만 잘라낸 이미지 (나머지는 흰색) */
+function highlightCanvas() {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  ed.strokes.forEach(s => s.pts.forEach(([x, y]) => {
+    x0 = Math.min(x0, x - s.w / 2); y0 = Math.min(y0, y - s.w / 2);
+    x1 = Math.max(x1, x + s.w / 2); y1 = Math.max(y1, y + s.w / 2);
+  }));
+  x0 = Math.max(0, Math.floor(x0)); y0 = Math.max(0, Math.floor(y0));
+  x1 = Math.min(cvBase.width, Math.ceil(x1)); y1 = Math.min(cvBase.height, Math.ceil(y1));
+  const bw = x1 - x0, bh = y1 - y0;
+  if (bw < 4 || bh < 4) return null;
+  const m = mk(bw, bh), mc = m.getContext('2d');
+  mc.drawImage(cvOv, -x0, -y0);                 // 형광펜 모양 = 마스크
+  mc.globalCompositeOperation = 'source-in';
+  mc.drawImage(cvBase, -x0, -y0);               // 마스크 안쪽 사진만 남김
+  const sc = (bw < 900 || bh < 300) ? 2 : 1;      // 작은 영역은 2배 키워 인식률 향상
+  const out = mk(bw * sc, bh * sc), oc = out.getContext('2d');
+  oc.fillStyle = '#fff'; oc.fillRect(0, 0, out.width, out.height);
+  oc.imageSmoothingQuality = 'high';
+  oc.drawImage(m, 0, 0, out.width, out.height);
+  return out;
+}
+function composite(maxW) {
+  const s = Math.min(1, maxW / cvBase.width);
+  const c = mk(cvBase.width * s, cvBase.height * s), x = c.getContext('2d');
+  x.drawImage(cvBase, 0, 0, c.width, c.height);
+  x.globalAlpha = 0.45; x.globalCompositeOperation = 'multiply';
+  x.drawImage(cvOv, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.8);
+}
+
+/* ---------- OCR (Tesseract.js, 한글+영어, 기기 안에서 처리) ---------- */
+let worker = null, ocrBusy = false;
+function ocrMsg(t) { $('#ocrMsg').textContent = t; }
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('OCR 엔진을 불러오지 못했습니다')); document.head.appendChild(s); }); }
+async function getWorker() {
+  if (worker) return worker;
+  ocrMsg('OCR 엔진 준비 중… (처음 한 번은 한글 데이터를 내려받느라 30초~1분 걸릴 수 있습니다)');
+  if (!window.Tesseract) await loadScript(TESS_URL);
+  worker = await Tesseract.createWorker(['kor', 'eng'], 1, {
+    logger: m => { if (m.status === 'recognizing text') ocrMsg('글자 인식 중… ' + Math.round(m.progress * 100) + '%'); }
+  });
+  await worker.setParameters({ preserve_interword_spaces: '1' });
+  return worker;
+}
+function cleanText(t) {
+  return String(t || '').replace(/\r/g, '').split(/\n\s*\n/)
+    .map(p => p.split('\n').map(s => s.trim()).filter(Boolean).join(' '))
+    .filter(Boolean).join('\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+}
+async function runOcr(mode) {
+  if (ocrBusy) return;
+  if (!ed.image) { toast('먼저 사진을 넣어 주세요'); return; }
+  let src;
+  if (mode === 'hl') {
+    if (!ed.strokes.length) { toast('형광펜으로 인식할 줄을 먼저 칠해 주세요'); return; }
+    src = highlightCanvas();
+    if (!src) { toast('칠한 영역이 너무 작습니다'); return; }
+  } else src = cvBase;
+  ocrBusy = true; $('#ocrHl').disabled = $('#ocrAll').disabled = true;
+  try {
+    const w = await getWorker();
+    ocrMsg('글자 인식 중…');
+    const { data } = await w.recognize(src);
+    const t = cleanText(data.text);
+    if (!t) { ocrMsg('글자를 찾지 못했습니다. 더 밝고 반듯하게 찍어 다시 해 보세요.'); return; }
+    const ta = $('#fText');
+    ta.value = (ta.value.trim() ? ta.value.trim() + '\n\n' : '') + t;
+    ocrMsg('✅ 변환 완료 — 틀린 글자는 아래 칸에서 바로 고치세요.');
+    if (window.innerWidth < 900) ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) {
+    console.warn(e); worker = null;
+    const m = String(e.message || e);
+    if (/SecurityError|Worker|claudeusercontent/i.test(m) || /claudeusercontent|claude\.ai/.test(location.hostname))
+      ocrMsg('⚠️ 지금 열린 곳(Claude 미리보기 창)에서는 글자 변환이 막혀 있습니다. 앱 전용 주소(GitHub Pages)에서 열어 주세요.');
+    else ocrMsg('⚠️ 변환 실패: ' + m + ' — 인터넷 연결을 확인하세요(첫 사용 시 필요).');
+  } finally { ocrBusy = false; $('#ocrHl').disabled = $('#ocrAll').disabled = false; }
+}
+$('#ocrHl').onclick = () => runOcr('hl');
+$('#ocrAll').onclick = () => runOcr('all');
+
+/* ---------- 메모 저장/삭제 ---------- */
+$('#mSave').onclick = async () => {
+  const text = $('#fText').value.trim(), note = $('#fNote').value.trim();
+  if (!ed.image && !text && !note) { toast('사진이나 글을 넣어 주세요'); return; }
+  const now = Date.now();
+  const m = ed.memo ? { ...ed.memo } : { id: uid(), bookId: ed.bookId, createdAt: now };
+  Object.assign(m, {
+    image: ed.image, strokes: ed.image ? ed.strokes : [], thumb: ed.image ? composite(800) : null,
+    text, note, page: $('#fPage').value.trim(), date: $('#fDate').value || today(), updatedAt: now
+  });
+  try {
+    await put('memos', m);
+    const b = await get('books', ed.bookId); b.updatedAt = now; await put('books', b);
+  } catch (e) { toast('저장 실패: ' + (e.message || e) + ' (저장공간 확인)', 4000); return; }
+  toast('저장했습니다');
+  location.hash = '#book/' + ed.bookId;
+};
+$('#mDel').onclick = async () => {
+  if (!ed.memo || !confirm('이 메모를 삭제할까요?')) return;
+  await del('memos', ed.memo.id);
+  toast('삭제했습니다'); location.hash = '#book/' + ed.bookId;
+};
+
+/* ---------- 백업 (구글드라이브) ---------- */
+$('#btnBackup').onclick = async () => {
+  const [books, memos] = await Promise.all([getAll('books'), getAll('memos')]);
+  const last = +localStorage.getItem('lastBackup') || 0;
+  let size = '';
+  try { const est = await navigator.storage.estimate(); size = ' · 사용 용량 약 ' + (est.usage / 1048576).toFixed(1) + 'MB'; } catch (_) {}
+  $('#bkStat').innerHTML = `이 기기에 저장된 것: 책 <b>${books.length}</b>권 · 메모 <b>${memos.length}</b>개${size}<br>마지막 백업: <b>${last ? new Date(last).toLocaleString('ko-KR') : '없음'}</b>`;
+  $('#mBackup').hidden = false;
+};
+$('#bkClose').onclick = () => { $('#mBackup').hidden = true; };
+function backupHtml(data) {
+  const json = JSON.stringify(data).replace(/</g, '\\u003c');
+  const view = "var d=JSON.parse(document.getElementById('backup-data').textContent);" +
+    "function e(s){return String(s==null?'':s).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]})}" +
+    "var h='';d.books.sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0)}).forEach(function(b){" +
+    "var ms=d.memos.filter(function(m){return m.bookId===b.id}).sort(function(x,y){return (y.date||'').localeCompare(x.date||'')});" +
+    "h+='<div class=\"bk\">'+(b.cover?'<img src=\"'+b.cover+'\">':'')+'<div><h2>'+e(b.title)+'</h2><div class=\"d\">'+e(b.author)+(b.category?' · '+e(b.category):'')+' · 메모 '+ms.length+'개</div></div></div>';" +
+    "ms.forEach(function(m){h+='<div class=\"m\"><div class=\"d\">'+e(m.date)+(m.page?' · p.'+e(m.page):'')+'</div>'+(m.thumb?'<img src=\"'+m.thumb+'\">':'')+(m.text?'<div class=\"t\">'+e(m.text)+'</div>':'')+(m.note?'<div class=\"n\">💭 '+e(m.note)+'</div>':'')+'</div>'})});" +
+    "document.getElementById('out').innerHTML=h||'<p>메모가 없습니다</p>';";
+  return '<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>독서메모 백업 ' + data.exportedAt.slice(0, 10) + '</title><style>body{font-family:sans-serif;max-width:860px;margin:auto;padding:16px;color:#222}' +
+    '.bk{display:flex;gap:14px;align-items:center;border-bottom:2px solid #2f5d50;padding:10px 0;margin-top:36px}.bk img{width:70px;border-radius:4px}.bk h2{margin:0}' +
+    '.m{border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0}.m img{max-width:100%;border-radius:6px}' +
+    '.t{white-space:pre-wrap;line-height:1.7;background:#fffbe6;padding:10px;border-radius:6px;margin-top:8px}.n{white-space:pre-wrap;color:#555;margin-top:8px}.d{color:#888;font-size:13px}</style></head>' +
+    '<body><h1>📚 독서메모 백업</h1><p class="d">백업 시각: ' + new Date(data.exportedAt).toLocaleString('ko-KR') + ' · 책 ' + data.books.length + '권 · 메모 ' + data.memos.length + '개<br>' +
+    '복원: 독서메모 앱 → ☁️ 백업 → [백업 불러오기]에서 이 파일을 선택하세요.</p><div id="out"></div>' +
+    '<script id="backup-data" type="application/json">' + json + '<\/script><script>' + view + '<\/script></body></html>';
+}
+$('#bkExport').onclick = async () => {
+  const btn = $('#bkExport'); btn.disabled = true;
+  try {
+    const data = { app: 'bookmemo', version: 1, exportedAt: new Date().toISOString(), books: await getAll('books'), memos: await getAll('memos') };
+    const d = new Date(), stamp = today().replace(/-/g, '') + '_' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+    const name = '독서메모_백업_' + stamp + '.html';
+    const file = new File([backupHtml(data)], name, { type: 'text/html' });
+    let shared = false;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: name }); shared = true; }
+      catch (e) { if (e.name === 'AbortError') { toast('백업을 취소했습니다'); return; } }
+    }
+    if (!shared) {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast('다운로드했습니다 → 구글드라이브에 올려 주세요', 3500);
+    } else toast('백업 파일을 보냈습니다');
+    localStorage.setItem('lastBackup', Date.now());
+    $('#mBackup').hidden = true; route();
+  } catch (e) { console.error(e); toast('백업 실패: ' + (e.message || e), 4000); }
+  finally { btn.disabled = false; }
+};
+$('#bkImport').onclick = () => { $('#fImport').value = ''; $('#fImport').click(); };
+$('#fImport').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try {
+    const txt = await f.text();
+    const m = txt.match(/<script id="backup-data" type="application\/json">([\s\S]*?)<\/script>/);
+    const data = JSON.parse(m ? m[1] : txt);
+    if (!Array.isArray(data.books) || !Array.isArray(data.memos)) throw new Error('독서메모 백업 파일이 아닙니다');
+    let nb = 0, nm = 0;
+    for (const b of data.books) { const o = await get('books', b.id); if (!o || (b.updatedAt || 0) >= (o.updatedAt || 0)) { await put('books', b); nb++; } }
+    for (const x of data.memos) { const o = await get('memos', x.id); if (!o || (x.updatedAt || 0) >= (o.updatedAt || 0)) { await put('memos', x); nm++; } }
+    toast(`불러오기 완료: 책 ${nb}권 · 메모 ${nm}개 반영`, 3500);
+    $('#mBackup').hidden = true; location.hash = ''; renderHome();
+  } catch (err) { console.error(err); toast('불러오기 실패: ' + (err.message || err), 4000); }
+});
+
+document.querySelectorAll('.modal').forEach(md => md.addEventListener('click', e => { if (e.target === md) md.hidden = true; }));
+if (/claudeusercontent|claude\.ai/.test(location.hostname)) {
+  const w = document.createElement('div'); w.className = 'hint';
+  w.innerHTML = '⚠️ 지금은 <b>Claude 미리보기 창</b>입니다. 여기서는 글자 변환이 안 되고 저장한 메모가 사라질 수 있습니다. 앱 전용 주소에서 열어 주세요.';
+  document.querySelector('main').prepend(w);
+}
+route();
+</script>
+</body>
+</html>
