@@ -135,7 +135,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 </head>
 <body>
 <header class="top">
-  <a href="#" class="logo">📚 독서메모 <small class="ver">v9 · 11/18</small></a>
+  <a href="#" class="logo">📚 독서메모 <small class="ver">v10 · 11/18</small></a>
   <button id="btnBackup" class="ghost">☁️ 백업</button>
 </header>
 
@@ -193,6 +193,8 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
         </div>
       </div>
       <div class="card">
+        <label>📖 이 메모의 책 <small>(잘못 넣었으면 다른 책을 고르고 저장 → 그 책으로 이동)</small></label>
+        <select id="fBook"></select>
         <div class="two">
           <div><label>찍은 날짜</label><input id="fDate" type="date"></div>
           <div><label>페이지</label><input id="fPage" inputmode="numeric" placeholder="예: 125"></div>
@@ -580,6 +582,8 @@ async function openEditor(a, b) {
   show('vEdit');
   ed.memo = memo; ed.bookId = bookId;
   $('#edTitle').textContent = '📖 ' + book.title + (memo ? '' : ' · 새 메모');
+  const allBooks = (await getAll('books')).sort((x, y) => (x.title || '').localeCompare(y.title || '', 'ko'));
+  $('#fBook').innerHTML = allBooks.map(x => `<option value="${x.id}" ${x.id === bookId ? 'selected' : ''}>${esc(x.title)}${x.author ? ' — ' + esc(x.author) : ''}</option>`).join('');
   $('#fDate').value = memo?.date || today(); $('#fPage').value = memo?.page || '';
   $('#fText').value = memo?.text || ''; $('#fNote').value = memo?.note || '';
   $('#mDel').hidden = !memo;
@@ -924,6 +928,8 @@ $('#mSave').onclick = async () => {
   syncCur();
   const now = Date.now();
   const m = ed.memo ? { ...ed.memo } : { id: uid(), bookId: ed.bookId, createdAt: now };
+  const oldBook = m.bookId, newBook = $('#fBook').value || ed.bookId;
+  m.bookId = newBook;
   delete m.image; delete m.strokes;   // 사진은 pages 안에만 보관 (중복 저장 방지)
   Object.assign(m, {
     pages: ed.pages, thumb: ed.pages[0]?.thumb || null,
@@ -931,10 +937,13 @@ $('#mSave').onclick = async () => {
   });
   try {
     await put('memos', m);
-    const b = await get('books', ed.bookId); b.updatedAt = now; await put('books', b);
+    for (const id of new Set([oldBook, newBook])) { const b = await get('books', id); if (b) { b.updatedAt = now; await put('books', b); } }
   } catch (e) { toast('저장 실패: ' + (e.message || e) + ' (저장공간 확인)', 4000); return; }
-  toast('저장했습니다');
-  location.hash = '#book/' + ed.bookId;
+  if (newBook !== oldBook) {
+    const nb = await get('books', newBook);
+    toast(`「${nb ? nb.title : ''}」(으)로 옮겼습니다`, 3000);
+  } else toast('저장했습니다');
+  location.hash = '#book/' + newBook;
 };
 $('#mDel').onclick = async () => {
   if (!ed.memo || !confirm('이 메모를 삭제할까요?')) return;
