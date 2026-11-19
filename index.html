@@ -114,6 +114,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 .pagestrip .add{padding:8px 10px;font-size:14px;background:#eef6f2;border-color:#bcd9cb;color:var(--g);font-weight:700}
 .pagestrip .lbl{font-size:13px;color:var(--sub);margin-right:2px}
 .lensimg{display:block;width:100%;max-height:50vh;object-fit:contain;background:#eee;border-radius:8px;margin-top:10px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
+.lensopen{display:block;text-align:center;margin-top:8px;padding:14px;font-size:16px;font-weight:700;background:#1a73e8;color:#fff;border-radius:10px;text-decoration:none}
 .lenshelp{font-size:12.5px;color:var(--sub);margin:6px 2px 4px;line-height:1.5}
 .txthead{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
 .txthead label{flex:1}
@@ -143,7 +144,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 </head>
 <body>
 <header class="top">
-  <a href="#" class="logo">📚 독서메모 <small class="ver">v16 · 11/19</small></a>
+  <a href="#" class="logo">📚 독서메모 <small class="ver">v17 · 11/19</small></a>
   <button id="btnBackup" class="ghost">☁️ 백업</button>
 </header>
 
@@ -275,18 +276,17 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 <div id="mLens" class="modal" hidden>
   <div class="sheet">
     <h3>🔍 구글 렌즈로 글자 가져오기</h3>
-    <div class="help" style="margin-top:4px">
-      <b>① 아래 사진을 손가락으로 길게 누르세요</b><br>
-      ② 메뉴에서 <b>"Google 렌즈로 이미지 검색"</b> 선택<br>
-      ③ 렌즈 화면 아래 <b>[텍스트]</b> → <b>[모두 선택]</b> 또는 원하는 부분 선택 → <b>[복사]</b><br>
-      ④ 뒤로 가기로 이 앱에 돌아와 <b>[📋 붙여넣기]</b>
-    </div>
     <img id="lensImg" class="lensimg" alt="렌즈로 보낼 사진">
-    <div class="row" style="margin-top:10px">
-      <button id="lensShare" class="sm">↗ 다른 앱으로 공유</button>
-      <button id="lensSave" class="sm">⬇ 사진 저장 (갤러리 텍스트 추출용)</button>
+    <button id="lensSave" class="primary bigbtn">① ⬇ 이 사진을 갤러리에 저장</button>
+    <a id="lensOpen" class="lensopen" href="intent://lens/#Intent;scheme=googleapp;package=com.google.android.googlequicksearchbox;end">② 🔍 구글 렌즈 열기</a>
+    <div class="help">
+      ③ 렌즈 화면 아래 <b>사진 목록의 첫 번째 사진</b>(방금 저장한 것)을 누르기<br>
+      ④ <b>[텍스트]</b> → 글자 선택 → <b>[복사]</b><br>
+      ⑤ 뒤로 가기로 이 앱에 돌아와 <b>[📋 붙여넣기]</b>
     </div>
-    <div class="help">메뉴에 렌즈가 안 나오면: 갤럭시는 화면 아래 <b>홈 버튼(막대)을 길게 눌러 "서클 투 서치"</b>로 이 사진의 글자에 동그라미를 그려 복사할 수도 있습니다(지원 기종만). 또는 [사진 저장] 후 <b>갤러리에서 사진 열기 → 오른쪽 아래 'T' 텍스트 추출</b> → 복사.</div>
+    <div class="help"><b>렌즈가 안 열리면</b>: Google 앱을 열고 검색창 오른쪽 <b>카메라 아이콘</b>을 누르면 같은 렌즈 화면입니다.<br>
+      <b>다른 방법</b>: 갤러리에서 저장한 사진 열기 → 오른쪽 아래 <b>'T'(텍스트 추출)</b> → 복사. 또는 지원 기종은 홈 막대를 길게 눌러 <b>서클 투 서치</b>.</div>
+    <div class="row"><button id="lensShare" class="sm">↗ 다른 앱으로 공유</button></div>
     <button id="lensClose" class="bigbtn">닫기</button>
   </div>
 </div>
@@ -958,6 +958,7 @@ $('#lensBtn').onclick = async () => {
   $('#mLens').hidden = false;
   lensPending = true;
 };
+$('#lensOpen').addEventListener('click', () => { lensPending = true; });
 $('#lensClose').onclick = () => { $('#mLens').hidden = true; };
 $('#lensShare').onclick = async () => {
   if (navigator.canShare && navigator.canShare({ files: [lensFile] })) {
@@ -967,7 +968,7 @@ $('#lensShare').onclick = async () => {
 $('#lensSave').onclick = () => {
   const a = document.createElement('a'); a.href = lensUrl; a.download = lensFile.name;
   document.body.appendChild(a); a.click(); a.remove();
-  toast('저장했습니다 → 갤러리(또는 내 파일 > 다운로드)에서 열어 텍스트 추출', 5000);
+  toast('저장했습니다 → 이제 ② 구글 렌즈 열기를 누르세요', 4000);
 };
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && lensPending && !$('#vEdit').hidden) {
