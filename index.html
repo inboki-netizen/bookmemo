@@ -120,6 +120,8 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 #pasteBtn{flex:none;margin-bottom:4px}
 #pasteBtn.blink{background:#fff3b0;border-color:#e6c200;font-weight:700;animation:bl 1s ease-in-out 3}
 @keyframes bl{50%{transform:scale(1.08)}}
+.metabox{margin-top:14px;padding-top:6px;border-top:1px dashed var(--line)}
+.optrow{display:flex;gap:16px;flex-wrap:wrap}
 .engopt{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin:8px 0 0}
 .engopt input{width:auto;margin:0}
 .ocrmsg{font-size:13px;color:var(--g);min-height:18px;margin-top:6px}
@@ -141,7 +143,7 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
 </head>
 <body>
 <header class="top">
-  <a href="#" class="logo">📚 독서메모 <small class="ver">v13 · 11/18</small></a>
+  <a href="#" class="logo">📚 독서메모 <small class="ver">v16 · 11/19</small></a>
   <button id="btnBackup" class="ghost">☁️ 백업</button>
 </header>
 
@@ -194,21 +196,26 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
             <button id="ocrHl">선택 부분만 글자로</button>
             <button id="ocrAll">사진 전체 글자로</button>
           </div>
-          <label class="engopt"><input type="checkbox" id="optEng"> 영어 문장이 많은 책 (영어도 함께 인식)</label>
+          <div class="optrow">
+            <label class="engopt"><input type="checkbox" id="optHanja"> 한자(漢字) 포함</label>
+            <label class="engopt"><input type="checkbox" id="optEng"> 영어 포함</label>
+          </div>
           <div id="ocrMsg" class="ocrmsg"></div>
         </div>
       </div>
       <div class="card">
-        <label>📖 이 메모의 책 <small>(잘못 넣었으면 다른 책을 고르고 저장 → 그 책으로 이동)</small></label>
+        <div class="txthead"><label>구절 (변환·붙여넣기한 텍스트 · 직접 수정 가능)</label><button id="pasteBtn" class="sm">📋 붙여넣기</button></div>
+        <textarea id="fText" rows="8" placeholder="OCR 결과가 여기에 들어옵니다. 직접 입력해도 됩니다."></textarea>
+        <label>내 생각 (선택)</label>
+        <textarea id="fNote" rows="3" placeholder="이 구절에 대한 생각"></textarea>
+        <div class="metabox">
+        <label>📖 이 메모의 책 <small>(바꾸고 저장하면 그 책으로 이동)</small></label>
         <select id="fBook"></select>
         <div class="two">
           <div><label>찍은 날짜</label><input id="fDate" type="date"></div>
           <div><label>페이지</label><input id="fPage" inputmode="numeric" placeholder="예: 125"></div>
         </div>
-        <div class="txthead"><label>구절 (변환·붙여넣기한 텍스트 · 직접 수정 가능)</label><button id="pasteBtn" class="sm">📋 붙여넣기</button></div>
-        <textarea id="fText" rows="8" placeholder="OCR 결과가 여기에 들어옵니다. 직접 입력해도 됩니다."></textarea>
-        <label>내 생각 (선택)</label>
-        <textarea id="fNote" rows="3" placeholder="이 구절에 대한 생각"></textarea>
+        </div>
         <div class="savebar">
           <button id="mDel" class="danger">삭제</button>
           <button id="mSave" class="primary">💾 저장</button>
@@ -239,6 +246,18 @@ mark{background:#ffe066;padding:0 1px;border-radius:2px}
       <button id="bCancel">취소</button>
       <button id="bSave" class="primary">저장</button>
     </div>
+  </div>
+</div>
+
+<!-- 사진 메모: 촬영/앨범 선택 -->
+<div id="mPick" class="modal" hidden>
+  <div class="sheet">
+    <h3 id="mPickTitle">사진 메모</h3>
+    <div class="addmemo">
+      <button id="pkCam" class="primary" data-pick="cam" data-target="newmemo">📷 사진 찍기</button>
+      <button id="pkAlbum" class="primary" data-pick="album" data-target="newmemo">🖼 앨범에서 고르기</button>
+    </div>
+    <button id="pkClose" class="bigbtn">취소</button>
   </div>
 </div>
 
@@ -407,7 +426,7 @@ function bookRow(b, n, q) {
     <div class="bi"><div class="bt">${hl(b.title, q)}</div>
     ${b.author ? `<div class="ba">${hl(b.author, q)}</div>` : ''}
     ${b.category ? `<span class="tag">${esc(b.category)}</span>` : ''}</div>
-    <div class="ract"><button class="rmemo" data-pick="album" data-target="newmemo" data-book="${b.id}">📷<small>메모</small></button>
+    <div class="ract"><button class="rmemo" data-choose="${b.id}">📷<small>메모</small></button>
     <button class="redit" data-edit="${b.id}" title="책 정보 수정">✏️<small>수정</small></button></div></a>`;
 }
 function memoRow(m, b, q) {
@@ -452,6 +471,15 @@ async function renderHome() {
 let qT;
 $('#q').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(renderHome, 200); });
 $('#homeList').addEventListener('click', async e => {
+  const ch = e.target.closest('[data-choose]');
+  if (ch) {
+    e.preventDefault(); e.stopPropagation();
+    const b = await get('books', ch.dataset.choose);
+    $('#mPickTitle').textContent = '📖 ' + (b ? b.title : '') + ' · 사진 메모';
+    $('#pkCam').dataset.book = $('#pkAlbum').dataset.book = ch.dataset.choose;
+    $('#mPick').hidden = false;
+    return;
+  }
   const btn = e.target.closest('[data-edit]'); if (!btn) return;
   e.preventDefault(); e.stopPropagation();
   const b = await get('books', btn.dataset.edit);
@@ -533,6 +561,7 @@ document.addEventListener('click', e => {
   const p = e.target.closest('[data-pick]'); if (!p) return;
   e.preventDefault(); e.stopPropagation();
   pickFor = p.dataset.target; pickBook = p.dataset.book || null;
+  $('#mPick').hidden = true;
   const inp = p.dataset.pick === 'cam' ? $('#fCam') : $('#fAlbum');
   inp.value = ''; inp.click();
 });
@@ -624,6 +653,7 @@ $('#edMove').onclick = async () => {
     ${b.id === ed.bookId ? '<span class="tag">지금 이 책</span>' : ''}</div></div>`).join('');
   $('#mMoveBook').hidden = false;
 };
+$('#pkClose').onclick = () => { $('#mPick').hidden = true; };
 $('#mvClose').onclick = () => { $('#mMoveBook').hidden = true; };
 $('#mvList').addEventListener('click', e => {
   const r = e.target.closest('[data-mv]'); if (!r) return;
@@ -811,7 +841,7 @@ function prepRegion(x, y, w, h, ratio) {
 /* 확신도가 아주 낮은 줄(흐린 옆 페이지, 잘린 줄 등)은 버림 */
 function goodLines(data, minConf) {
   if (!Array.isArray(data.lines) || !data.lines.length) return data.text;
-  const keep = data.lines.filter(l => (l.confidence || 0) >= minConf && /[가-힣A-Za-z0-9]/.test(l.text));
+  const keep = data.lines.filter(l => (l.confidence || 0) >= minConf && /[가-힣A-Za-z0-9\u3400-\u9FFF\uF900-\uFAFF]/.test(l.text));
   return keep.length ? keep.map(l => l.text.trim()).join('\n') : data.text;
 }
 /* 한글 글자 사이에 잘못 들어간 띄어쓰기 정리 (한 글자씩 끊긴 경우만) */
@@ -836,7 +866,14 @@ function composite(maxW) {
 let worker = null, ocrBusy = false, ocrPrefix = '';
 function ocrMsg(t) { $('#ocrMsg').textContent = t; }
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('OCR 엔진을 불러오지 못했습니다')); document.head.appendChild(s); }); }
-function ocrLang() { try { return localStorage.getItem('ocrEng') === '1' ? ['kor', 'eng'] : ['kor']; } catch (_) { return ['kor']; } }
+function ocrLang() {
+  const l = ['kor'];
+  try {
+    if (localStorage.getItem('ocrHanja') === '1') l.push('chi_tra');   // 한자(번체·정자)
+    if (localStorage.getItem('ocrEng') === '1') l.push('eng');
+  } catch (_) {}
+  return l;
+}
 async function getWorker() {
   if (worker && worker._lang === ocrLang().join('+')) return worker;
   if (worker) { try { await worker.terminate(); } catch (_) {} worker = null; }
@@ -955,6 +992,11 @@ $('#pasteBtn').onclick = async () => {
 };
 try { $('#optEng').checked = localStorage.getItem('ocrEng') === '1'; } catch (_) {}
 $('#optEng').onchange = e => { try { localStorage.setItem('ocrEng', e.target.checked ? '1' : '0'); } catch (_) {} };
+try { $('#optHanja').checked = localStorage.getItem('ocrHanja') === '1'; } catch (_) {}
+$('#optHanja').onchange = e => {
+  try { localStorage.setItem('ocrHanja', e.target.checked ? '1' : '0'); } catch (_) {}
+  if (e.target.checked) toast('한자 인식: 처음 한 번 한자 데이터(약 2MB)를 내려받습니다. 한자가 없는 책은 꺼 두는 것이 더 정확합니다.', 5000);
+};
 $('#ocrHl').onclick = () => runOcr('hl');
 $('#ocrAll').onclick = () => runOcr('all');
 
